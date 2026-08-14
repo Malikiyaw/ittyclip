@@ -1,26 +1,10 @@
 import type { Metadata } from "next";
-import "@fontsource/space-grotesk/400.css";
-import "@fontsource/space-grotesk/500.css";
-import "@fontsource/space-grotesk/700.css";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
 import "./globals.css";
-import { ScrollProvider } from "@/components/ScrollProvider";
-import { Cursor } from "@/components/landing/Cursor";
-import BackgroundShaderClient from "@/components/landing/BackgroundShaderClient";
 
 export const metadata: Metadata = {
-  title: "ittyclip — Every long video. Clipped into gold.",
+  title: "Intelligence Designed To Evolve",
   description:
-    "ittyclip is the browser-native AI clipping studio. It hunts your best moments, captions them word-perfect, reframes them vertical, and ships viral shorts — 1000x faster than Opus.",
-  keywords: ["ai video clipping", "short form", "opus clip alternative", "auto captions", "tiktok shorts editor"],
-  openGraph: {
-    title: "ittyclip — Every long video. Clipped into gold.",
-    description:
-      "The browser-native AI studio that turns long videos into viral shorts. Zero installs, zero uploads, zero waiting.",
-    type: "website",
-  },
+    "Build applications that reason, adapt and collaborate using a modular AI platform designed for production.",
 };
 
 export default function RootLayout({
@@ -28,13 +12,26 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="bg-ink text-fg">
-        <ScrollProvider>
-          {children}
-          <BackgroundShaderClient />
-          <Cursor />
-        </ScrollProvider>
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          href="https://db.onlinewebfonts.com/c/8cb707a9b8a73f8a7403336b861c3074?family=BubbledotICG-FinePos"
+          rel="stylesheet"
+        />
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+          integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

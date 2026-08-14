@@ -1,9 +1,14 @@
 import type { NextConfig } from "next";
 
-const securityHeaders = [
+const baseHeaders = [{ key: "X-Content-Type-Options", value: "nosniff" }];
+
+// COOP/COEP are only required on /studio (SharedArrayBuffer for ffmpeg-mt + whisper pthreads).
+// The landing page embeds a third-party CloudFront video that sends no CORP/CORS headers,
+// so cross-origin isolation must not apply there.
+const studioHeaders = [
+  ...baseHeaders,
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
-  { key: "X-Content-Type-Options", value: "nosniff" },
 ];
 
 const nextConfig: NextConfig = {
@@ -11,8 +16,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
-      { source: "/:path*", headers: securityHeaders },
-      { source: "/studio/:path*", headers: securityHeaders },
+      { source: "/:path*", headers: baseHeaders },
+      { source: "/studio/:path*", headers: studioHeaders },
     ];
   },
 };
