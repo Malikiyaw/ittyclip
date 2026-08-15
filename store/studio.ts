@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { analyzeFile } from "@/lib/audio";
+import { analyzeWithHighlights } from "@/lib/audio";
 import { segmentTranscript, makeLines } from "@/lib/captions";
 import { presetFor } from "@/lib/captions/presets";
 import { runHighlightAnalysis } from "@/lib/analysis/engine";
@@ -234,8 +234,17 @@ export const useStudio = create<StudioState>()((set, get) => ({
     });
 
     let analysis: AnalysisResult | null = null;
+    let highlights: RankedHighlight[] = [];
     try {
-      analysis = await analyzeFile(file, (p, stage) => set({ analyzeProgress: p, analyzeStage: stage ?? "" }), abort.signal);
+      const payload = await analyzeWithHighlights(
+        file,
+        get().clipLength,
+        10,
+        (p, stage) => set({ analyzeProgress: p, analyzeStage: stage ?? "" }),
+        abort.signal
+      );
+      analysis = payload.analysis;
+      highlights = payload.highlights;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         URL.revokeObjectURL(url);
@@ -256,21 +265,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
       mime: file.type || "video/mp4",
     };
 
-    let pending: RankedHighlight[] = [];
-    if (analysis) {
-      pending = runHighlightAnalysis({
-        envelope: analysis.envelope,
-        hopSec: analysis.hopSec,
-        duration: analysis.duration,
-        silence: analysis.silence,
-        transcript: null,
-        clipLength: get().clipLength,
-        maxResults: 10,
-      });
-    }
-
     const legacy = (analysis?.moments ?? []).map(legacyRanked);
-    const pool = pending.length > 0 ? pending : legacy;
+    const pool = highlights.length > 0 ? highlights : legacy;
 
     set({
       media,

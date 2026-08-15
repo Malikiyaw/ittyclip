@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStudio } from "@/store/studio";
 import { aiHooks, buildSrt, makeLines } from "@/lib/captions";
 import { CLIP_LENGTHS, fmtClock, type CaptionAnimation, type CaptionSettings, type ClipLength } from "@/lib/types";
@@ -866,41 +866,58 @@ function ReframeTab() {
   const commitReframe = useStudio((s) => s.commitReframe);
   const showToast = useStudio((s) => s.showToast);
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const startTracking = async () => {
     if (!media || running) return;
     setRunning(true);
+    setProgress(0);
     setError(null);
+    const abort = new AbortController();
+    abortRef.current = abort;
     try {
       const { trackSubject } = await import("@/lib/reframe/track");
-      const track = await trackSubject(media.url, media.duration, (stage) => {
-        updateReframe({ status: stage });
+      const track = await trackSubject(media.url, media.duration, {
+        onStatus: (stage) => updateReframe({ status: stage }),
+        onProgress: (f) => setProgress(f),
+        signal: abort.signal,
       });
       if (!track || track.length < 2) {
         setError("Couldn't detect a face — switching to center crop. You can still adjust it manually.");
         updateReframe({ enabled: true, mode: "center", status: "error", track: null });
-        setRunning(false);
         return;
       }
       updateReframe({ enabled: true, mode: "tracked", track, status: "done" });
       commitReframe();
       showToast("Auto-reframe tracked — preview simulates the camera move");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        updateReframe({ status: "idle" });
+        showToast("Face tracking cancelled");
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       updateReframe({ enabled: true, mode: "center", status: "error", track: null });
       showToast("Face tracking unavailable — using center crop");
     } finally {
       setRunning(false);
+      setProgress(null);
+      abortRef.current = null;
     }
+  };
+
+  const cancelTracking = () => {
+    abortRef.current?.abort();
   };
 
   const statusLabel =
     reframe.status === "detecting"
       ? "Detecting subject…"
       : reframe.status === "tracking"
-        ? "Tracking subject…"
+        ? `Tracking subject… ${progress !== null ? Math.round(progress * 100) + "%" : ""}`
         : reframe.status === "done"
           ? "Tracked — preview mirrors the export"
           : reframe.status === "error"
@@ -942,6 +959,22 @@ function ReframeTab() {
               ? "Disable auto-reframe"
               : "Auto-reframe this video"}
         </button>
+        {running && progress !== null && (
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-white transition-[width] duration-150"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+        )}
+        {running && (
+          <button
+            onClick={cancelTracking}
+            className="mt-2 w-full rounded-full border border-white/15 px-3 py-1.5 text-[10px] text-white/60 transition-colors hover:border-white/40 hover:text-white"
+          >
+            Cancel tracking
+          </button>
+        )}
         {reframe.enabled && reframe.mode === "tracked" && (
           <button
             onClick={() => {
