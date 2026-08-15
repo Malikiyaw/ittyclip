@@ -10,15 +10,25 @@ import {
 export { ANALYSIS_STAGES, HOP_MS, computeEnvelope, detectEnergyPeaks, detectMoments, detectSilence, detectSpeech, waveformPeaks } from "@/lib/analysis/extract";
 export type { AnalysisProgress } from "@/lib/analysis/extract";
 
-/** Maximum file size for full local signal analysis. This is intentionally
- * conservative because mobile browsers can hold several copies of a decoded
- * audio buffer at once and iOS may terminate the tab instead of throwing. */
-export const MAX_LOCAL_ANALYSIS_BYTES = 250 * 1024 * 1024;
+/**
+ * Full local audio decoding can temporarily require several copies of the
+ * source data. Keep the automatic path conservative so mobile Safari is not
+ * killed by the OS before JavaScript gets a chance to handle an exception.
+ */
+export const MAX_LOCAL_ANALYSIS_BYTES = 120 * 1024 * 1024;
 
 function assertSafeForLocalAnalysis(file: Blob) {
   if (file.size > MAX_LOCAL_ANALYSIS_BYTES) {
-    throw new Error(`This video is ${(file.size / 1024 / 1024).toFixed(0)} MB. For reliable mobile performance, automatic analysis is limited to 250 MB. You can still edit the video manually.`);
+    throw new Error(`This video is ${(file.size / 1024 / 1024).toFixed(0)} MB. Automatic analysis is limited to 120 MB on this device to prevent memory-related page restarts. You can still edit the video manually.`);
   }
+}
+
+function isConstrainedDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return isIOS || (typeof memory === "number" && memory <= 4);
 }
 
 function decodeAudio(file: Blob, signal?: AbortSignal): Promise<AudioBuffer> {
@@ -112,18 +122,23 @@ function analyzeWithWorker(file: File, clipLength: ClipLength, maxResults: numbe
   });
 }
 
-/** Full local ingest. Large files fail safely instead of falling back to a
- * memory-heavy main-thread decode that can kill mobile Safari. */
 export async function analyzeWithHighlights(file: File, clipLength: ClipLength, maxResults: number, onProgress?: (p: number, stage?: string) => void, signal?: AbortSignal): Promise<AnalyzePayload | null> {
   assertSafeForLocalAnalysis(file);
+  const constrained = isConstrainedDevice();
+
   if (typeof Worker !== "undefined") {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const payload = await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
-        onProgress?.(0.82, "Reading visual events");
-        const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, signal, (p) => onProgress?.(0.82 + p * 0.10, "Reading visual events"));
-        payload.analysis.visualEvents = visualEvents;
-        payload.highlights = runHighlightAnalysis({ ...payload.analysis, transcript: null, visualEvents, clipLength, maxResults });
+        // Visual frame decoding creates another decoder/canvas pipeline. Skip
+        // it on iOS/low-memory devices; the audio+semantic engine remains fully
+        // functional and the Studio stays stable instead of restarting.
+        if (!constrained) {
+          onProgress?.(0.82, "Reading visual events");
+          const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, signal, (p) => onProgress?.(0.82 + p * 0.10, "Reading visual events"));
+          payload.analysis.visualEvents = visualEvents;
+          payload.highlights = runHighlightAnalysis({ ...payload.analysis, transcript: null, visualEvents, clipLength, maxResults });
+        }
         return payload;
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") throw err;
@@ -131,10 +146,13 @@ export async function analyzeWithHighlights(file: File, clipLength: ClipLength, 
       }
     }
   }
+
   const analysis = await analyzeFileMain(file, onProgress, signal);
-  const visualEvents = await analyzeVisualEvents(file, analysis.duration, signal);
-  analysis.visualEvents = visualEvents;
-  const highlights = runHighlightAnalysis({ ...analysis, transcript: null, visualEvents, clipLength, maxResults });
+  if (!constrained) {
+    const visualEvents = await analyzeVisualEvents(file, analysis.duration, signal);
+    analysis.visualEvents = visualEvents;
+  }
+  const highlights = runHighlightAnalysis({ ...analysis, transcript: null, visualEvents: analysis.visualEvents ?? [], clipLength, maxResults });
   return { analysis, highlights };
 }
 
