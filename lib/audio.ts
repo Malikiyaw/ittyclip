@@ -1,4 +1,5 @@
 import type { AnalysisResult, ClipLength, Moment } from "@/lib/types";
+import { uid } from "@/lib/types";
 import { runHighlightAnalysis } from "@/lib/analysis/engine";
 import type { RankedHighlight } from "@/lib/analysis/types";
 import { analyzeVisualEvents } from "@/lib/analysis/visual";
@@ -57,6 +58,76 @@ function decodeAudio(file: Blob, signal?: AbortSignal): Promise<AudioBuffer> {
 }
 
 export function decodeAudioFile(file: Blob, signal?: AbortSignal): Promise<AudioBuffer> { return decodeAudio(file, signal); }
+
+async function readVideoDuration(file: File, signal?: AbortSignal): Promise<number> {
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise<number>((resolve) => {
+      const video = document.createElement("video");
+      let settled = false;
+      const finish = (duration: number) => {
+        if (settled) return;
+        settled = true;
+        video.removeAttribute("src");
+        video.load();
+        resolve(Number.isFinite(duration) && duration > 0 ? duration : 0);
+      };
+      video.preload = "metadata";
+      video.onloadedmetadata = () => finish(video.duration);
+      video.onerror = () => finish(0);
+      video.src = url;
+      signal?.addEventListener("abort", () => finish(0), { once: true });
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * A deliberately lightweight fallback for constrained browsers. It does not
+ * pretend to have audio intelligence: it creates safe temporal windows so the
+ * Studio remains usable, while transcript + server AI can still produce real
+ * semantic rankings on phones.
+ */
+async function makeMobileFallback(file: File, clipLength: ClipLength, signal?: AbortSignal): Promise<AnalyzePayload> {
+  const duration = await readVideoDuration(file, signal);
+  const safeDuration = Math.max(0.1, duration);
+  const target = Math.min(safeDuration, clipLength);
+  const moments: Moment[] = [];
+  const count = Math.min(10, Math.max(1, Math.ceil(safeDuration / Math.max(target, 1))));
+
+  if (safeDuration <= target + 0.01) {
+    moments.push({ id: uid(), start: 0, end: safeDuration, score: 50, label: "Mobile highlight" });
+  } else {
+    const maxStart = Math.max(0, safeDuration - target);
+    const slots = Math.min(10, Math.max(1, Math.ceil(safeDuration / target)));
+    for (let i = 0; i < slots; i++) {
+      const start = Math.min(maxStart, (i * maxStart) / Math.max(1, slots - 1));
+      moments.push({
+        id: uid(),
+        start,
+        end: Math.min(safeDuration, start + target),
+        score: 50,
+        label: `Mobile highlight ${i + 1}`,
+      });
+    }
+  }
+
+  return {
+    analysis: {
+      duration: safeDuration,
+      envelope: new Float32Array(0),
+      hopSec: HOP_MS / 1000,
+      speech: [],
+      energy: [],
+      moments,
+      silence: [],
+      visualEvents: [],
+    },
+    highlights: [],
+  };
+}
 
 export async function analyzeFileMain(file: File, onProgress?: (p: number, stage?: string) => void, signal?: AbortSignal): Promise<AnalysisResult> {
   assertSafeForLocalAnalysis(file);
@@ -127,11 +198,13 @@ export async function analyzeWithHighlights(file: File, clipLength: ClipLength, 
   const constrained = isConstrainedDevice();
 
   // iOS Safari is unusually aggressive about terminating tabs during WebAudio
-  // decoding. Do not start a memory-heavy local decoder there. Ingest continues
-  // normally and the video is available immediately for manual editing.
+  // decoding. Keep the local path lightweight, but return usable timeline
+  // windows instead of leaving the Studio empty.
   if (constrained) {
+    onProgress?.(0.35, "Preparing mobile-safe highlights");
+    const fallback = await makeMobileFallback(file, clipLength, signal);
     onProgress?.(1, "Ready for editing");
-    return null;
+    return fallback;
   }
 
   if (typeof Worker !== "undefined") {
