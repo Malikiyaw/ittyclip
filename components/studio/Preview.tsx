@@ -100,12 +100,13 @@ export function Preview() {
     if (isPlaying) {
       const start = async () => {
         try {
+          video.muted = false;
           await video.play();
           setVideoError(null);
         } catch (err) {
           setPlaying(false);
           const message = err instanceof DOMException && err.name === "NotAllowedError"
-            ? "Tap the video controls once to allow playback."
+            ? "Tap Play once to allow video and audio playback."
             : "This video could not be played in this browser.";
           setVideoError(message);
           showToast(message);
@@ -135,14 +136,20 @@ export function Preview() {
   const ratio = ASPECTS[aspect].ratio;
   const isVertical = aspect === "9:16";
 
+  // Always mirror the crop/reframe state in the preview, including a 1x
+  // center crop. Previously the preview only transformed when scale > 1,
+  // making the result visibly different from the exported video.
   const reframeTransform = useMemo(() => {
-    if (!reframe.enabled || reframe.scale <= 1) return null;
+    if (!reframe.enabled) return null;
     const crop = reframeCropAt(playhead, media.width, media.height, ratio, reframe);
     const scaleX = media.width / crop.w;
     const scaleY = media.height / crop.h;
     const tx = (0.5 - (crop.x + crop.w / 2) / media.width) * media.width;
     const ty = (0.5 - (crop.y + crop.h / 2) / media.height) * media.height;
-    return { transform: `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})` };
+    return {
+      transform: `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`,
+      transformOrigin: "center center",
+    };
   }, [reframe, playhead, media.width, media.height, ratio]);
 
   const handleVideoError = () => {
@@ -170,7 +177,6 @@ export function Preview() {
             className="h-full w-full rounded-2xl bg-black object-contain shadow-[0_40px_100px_rgba(0,0,0,0.85)] ring-1 ring-white/15"
             style={reframeTransform ?? undefined}
             playsInline
-            muted
             controls={mobileControls}
             preload="auto"
             onLoadedMetadata={() => setVideoError(null)}
