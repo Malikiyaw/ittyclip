@@ -1,0 +1,234 @@
+/* Ittyclip Studio responsive layer. Kept separate so the desktop Swiss styles stay stable. */
+
+.studio,
+.studio * {
+  box-sizing: border-box;
+}
+
+/* MediaPanel renders its own <aside> inside StudioShell's sidebar. The old
+ * fixed w-72/w-80 width left a large dead black column on phones. */
+.studio > div > aside > aside {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  border-right: 0 !important;
+  background: transparent;
+}
+
+.studio .studio-media-sidebar {
+  min-width: 0;
+}
+
+.studio .studio-media-tabs {
+  width: calc(100% - 24px);
+  max-width: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.studio .studio-media-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.studio .studio-media-tabs button {
+  flex: 0 0 auto;
+  min-width: 68px;
+  white-space: nowrap;
+}
+
+.studio .studio-preview {
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio .studio-preview-stage {
+  min-width: 0;
+  min-height: 0;
+}
+
+.studio .studio-preview-controls {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.studio .studio-preview-controls::-webkit-scrollbar {
+  display: none;
+}
+
+.studio .studio-preview-controls .s-seg {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.studio .studio-timeline {
+  min-width: 0;
+}
+
+.studio .studio-timeline-toolbar {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.studio .studio-timeline-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  html,
+  body {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .studio {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .studio .studio-topbar {
+    min-height: 58px;
+    height: auto;
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+
+  .studio .studio-topbar .studio-project-name {
+    max-width: 34vw;
+  }
+
+  .studio .studio-topbar .s-btn,
+  .studio .studio-topbar .s-btn-solid {
+    min-height: 38px;
+    min-width: 38px;
+  }
+
+  .studio .studio-preview {
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  .studio .studio-preview-stage {
+    flex: 1 1 auto;
+    min-height: 250px;
+    padding: 12px;
+  }
+
+  .studio .studio-preview-stage > div[style*="aspect-ratio"] {
+    width: auto !important;
+    height: min(100%, 64dvh) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: 64dvh !important;
+  }
+
+  .studio .studio-preview-controls {
+    height: auto;
+    min-height: 58px;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .studio .studio-preview-controls .s-seg button {
+    min-width: 48px;
+    padding: 8px 11px;
+  }
+
+  .studio .studio-timeline {
+    height: 176px;
+    max-height: 30dvh;
+  }
+
+  .studio .studio-timeline-toolbar {
+    min-height: 46px;
+    padding: 7px 10px;
+    gap: 8px;
+  }
+
+  .studio .studio-timeline-toolbar input[type="range"] {
+    width: 90px;
+    flex: 0 0 90px;
+  }
+
+  .studio .studio-media-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-top: 1px solid rgba(255,255,255,.1);
+    border-right: 0 !important;
+  }
+
+  .studio .studio-media-sidebar > aside {
+    width: 100% !important;
+  }
+
+  .studio .studio-media-tabs {
+    margin-top: 10px;
+    margin-left: 10px;
+    width: calc(100% - 20px);
+  }
+
+  .studio .studio-media-tabs button {
+    min-width: 72px;
+    padding: 9px 13px;
+  }
+
+  .studio .studio-media-content {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .studio .studio-media-content > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .studio .studio-media-content .s-seg {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .studio .studio-media-content input,
+  .studio .studio-media-content textarea,
+  .studio .studio-media-content button {
+    max-width: 100%;
+  }
+
+  .studio .studio-media-content .grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .studio .studio-media-content .col-span-2 {
+    grid-column: span 1 / span 1;
+  }
+
+  .studio .studio-media-content .w-40 {
+    width: min(55vw, 180px);
+  }
+}
+
+@media (max-width: 380px) {
+  .studio .studio-topbar .studio-project-name {
+    max-width: 28vw;
+  }
+
+  .studio .studio-preview-stage {
+    min-height: 220px;
+  }
+
+  .studio .studio-timeline {
+    height: 150px;
+  }
+}
+
+@media (min-width: 768px) {
+  .studio .studio-media-sidebar > aside {
+    width: 100% !important;
+  }
+}
