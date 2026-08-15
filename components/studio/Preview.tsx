@@ -30,6 +30,7 @@ export function Preview() {
   const tick = useStudio((s) => s.tick);
   const reframe = useStudio((s) => s.reframe);
   const showSafeZones = useStudio((s) => s.showSafeZones);
+  const toggleSafeZones = useStudio((s) => s.toggleSafeZones);
   const showToast = useStudio((s) => s.showToast);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -45,10 +46,6 @@ export function Preview() {
     return () => query.removeEventListener?.("change", update);
   }, []);
 
-  // iOS Safari has historically had unreliable range/seek behavior with blob
-  // URLs. Safari uniquely supports assigning a File/Blob directly to
-  // HTMLMediaElement.srcObject, so use the original File there. Other browsers
-  // keep the portable blob URL path.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !media) return;
@@ -136,9 +133,6 @@ export function Preview() {
   const ratio = ASPECTS[aspect].ratio;
   const isVertical = aspect === "9:16";
 
-  // Always mirror the crop/reframe state in the preview, including a 1x
-  // center crop. Previously the preview only transformed when scale > 1,
-  // making the result visibly different from the exported video.
   const reframeTransform = useMemo(() => {
     if (!reframe.enabled) return null;
     const crop = reframeCropAt(playhead, media.width, media.height, ratio, reframe);
@@ -197,6 +191,14 @@ export function Preview() {
           {isPlaying ? <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden><rect x="2" y="2" width="4" height="10" rx="1" fill="black" /><rect x="8" y="2" width="4" height="10" rx="1" fill="black" /></svg> : <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden><path d="M3 2.5 L12 7 L3 11.5 Z" fill="black" /></svg>}
         </button>
         <div className="s-seg shrink-0">{ASPECT_BUTTONS.map((b) => <button key={b.key} onClick={() => { useStudio.getState().setAspect(b.key); useStudio.getState().showToast(`${b.key} — ${ASPECTS[b.key].hint}`); }} className={aspect === b.key ? "active" : ""} aria-pressed={aspect === b.key}>{b.label}</button>)}</div>
+        <button
+          type="button"
+          onClick={() => { toggleSafeZones(); showToast(showSafeZones ? "Safe zones hidden" : "Safe zones shown"); }}
+          className={`s-btn shrink-0 px-2.5 py-1.5 text-[10px] ${showSafeZones ? "bg-white text-black" : ""}`}
+          aria-pressed={showSafeZones}
+        >
+          Safe zones
+        </button>
         <span className="hidden shrink-0 font-mono text-xs whitespace-nowrap text-white/60 md:inline">{fmtClock(playhead)} / {fmtClock(duration)}</span>
         <input type="range" min={0} max={Math.max(0.1, duration)} step={0.01} value={Math.min(playhead, duration)} onChange={(e) => setPlayhead(parseFloat(e.target.value))} className="min-w-[90px] flex-1" aria-label="Seek" />
       </div>
