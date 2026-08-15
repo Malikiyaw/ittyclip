@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useAuth, hydrateAuth, isSignedIn } from "@/store/auth";
 
 type StatProps = {
   icon: string;
@@ -82,17 +84,92 @@ const STATS = [
   { icon: "%", value: 100, suffix: "%", decimals: 0, label: "In-Browser Processing" },
 ];
 
+interface Tier {
+  name: string;
+  price: string;
+  per: string;
+  desc: string;
+  features: string[];
+  cta: string;
+  featured?: boolean;
+  badge?: string;
+}
+
+const TIERS: Tier[] = [
+  {
+    name: "Free",
+    price: "$0",
+    per: "forever",
+    desc: "Everything you need to taste the gold.",
+    features: [
+      "3 clips per month",
+      "720p export",
+      "ittyclip watermark",
+      "Classic caption style",
+      "tiny.en whisper model",
+      "SRT export",
+    ],
+    cta: "Start free",
+  },
+  {
+    name: "Creator",
+    price: "$12",
+    per: "/month",
+    desc: "For serious creators shipping daily shorts.",
+    features: [
+      "30 clips per month",
+      "1080p export",
+      "No watermark",
+      "All 6 caption styles",
+      "base.en whisper model",
+      "SRT export + priority encode",
+    ],
+    cta: "Get Creator",
+    featured: true,
+    badge: "Most popular",
+  },
+  {
+    name: "Studio",
+    price: "$29",
+    per: "/month",
+    desc: "For teams and pros with zero limits.",
+    features: [
+      "Unlimited clips",
+      "4K export",
+      "No watermark",
+      "All styles + beta styles",
+      "All whisper models",
+      "Priority encoding",
+    ],
+    cta: "Go Studio",
+  },
+];
+
 const NAV_LINKS = [
-  { label: "Home", href: "/", active: true },
-  { label: "Studio", href: "/studio", active: false },
-  { label: "Contact", href: "#", active: false },
+  { label: "Home", href: "/" },
+  { label: "Studio", href: "/studio" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "Contact", href: "#" },
 ];
 
 const VIDEO_SRC =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4";
 
 export default function SwissLanding() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const session = useAuth((s) => s.session);
+  const signedIn = session !== null;
+
+  useEffect(() => {
+    hydrateAuth();
+  }, []);
+
+  const goStudio = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    if (isSignedIn()) router.push("/studio");
+    else router.push("/auth");
+  };
 
   useEffect(() => {
     if (open) {
@@ -134,16 +211,28 @@ export default function SwissLanding() {
           </Link>
 
           <nav className="nav" aria-label="Primary">
-            {NAV_LINKS.map((link) => (
-              <Link key={link.label} href={link.href} className={link.active ? "active" : ""}>
-                {link.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((link) =>
+              link.href === "/studio" ? (
+                <a key={link.label} href={link.href} onClick={goStudio}>
+                  {link.label}
+                </a>
+              ) : (
+                <Link key={link.label} href={link.href}>
+                  {link.label}
+                </Link>
+              )
+            )}
           </nav>
 
-          <Link className="sign-in" href="/studio">
-            Open Studio
-          </Link>
+          {signedIn ? (
+            <Link className="sign-in" href="/studio" onClick={goStudio}>
+              {session?.name || "Open Studio"}
+            </Link>
+          ) : (
+            <Link className="sign-in" href="/auth">
+              Sign in
+            </Link>
+          )}
 
           <button
             type="button"
@@ -194,9 +283,9 @@ export default function SwissLanding() {
             Nothing uploads, nothing waits.
           </p>
 
-          <Link className="cta anim" style={{ "--d": "0.4s" } as React.CSSProperties} href="/studio">
-            Launch the studio
-          </Link>
+          <a className="cta anim" style={{ "--d": "0.4s" } as React.CSSProperties} href="/studio" onClick={goStudio}>
+            {signedIn ? "Open studio" : "Launch the studio"}
+          </a>
         </section>
 
         <footer className="stats">
@@ -214,6 +303,48 @@ export default function SwissLanding() {
             />
           ))}
         </footer>
+
+        <section id="pricing" className="pricing">
+          <div className="pricing-head">
+            <p className="pricing-eyebrow">Pricing</p>
+            <h2 className="pricing-title">Simple pricing, serious output.</h2>
+            <p className="pricing-sub">
+              Start free. Upgrade when the gold rush starts. No uploads, no
+              lock-in — everything renders in your browser.
+            </p>
+          </div>
+
+          <div className="pricing-grid">
+            {TIERS.map((tier) => (
+              <div key={tier.name} className={`price-card${tier.featured ? " featured" : ""}`}>
+                {tier.badge && <span className="price-badge">{tier.badge}</span>}
+                <p className="price-name">{tier.name}</p>
+                <div className="price-amount">
+                  <span className="price-num">{tier.price}</span>
+                  <span className="price-per">{tier.per}</span>
+                </div>
+                <p className="price-desc">{tier.desc}</p>
+                <ul className="price-features">
+                  {tier.features.map((f) => (
+                    <li key={f}>
+                      <span className="price-check" aria-hidden>
+                        ✓
+                      </span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <a className="price-cta" href="/auth" onClick={goStudio}>
+                  {tier.cta}
+                </a>
+              </div>
+            ))}
+          </div>
+
+          <p className="pricing-note">
+            All plans run 100% in your browser — no uploads, no waiting.
+          </p>
+        </section>
       </div>
 
       <div
@@ -226,19 +357,28 @@ export default function SwissLanding() {
       >
         <nav className="menu-sheet" aria-label="Mobile">
           {NAV_LINKS.map((link, i) => (
-            <Link
+            <a
               key={link.label}
               href={link.href}
-              className={`menu-link${link.active ? " active" : ""}`}
+              className="menu-link"
               style={{ "--d": `${0.03 + i * 0.05}s` } as React.CSSProperties}
-              onClick={() => setOpen(false)}
+              onClick={(e) => {
+                setOpen(false);
+                if (link.href === "/studio") goStudio(e);
+              }}
             >
               {link.label}
-            </Link>
+            </a>
           ))}
-          <Link className="menu-signin" href="/studio" onClick={() => setOpen(false)}>
-            Open Studio
-          </Link>
+          {signedIn ? (
+            <a className="menu-signin" href="/studio" onClick={(e) => { setOpen(false); goStudio(e); }}>
+              {session?.name || "Open Studio"}
+            </a>
+          ) : (
+            <Link className="menu-signin" href="/auth" onClick={() => setOpen(false)}>
+              Sign in
+            </Link>
+          )}
         </nav>
       </div>
     </div>

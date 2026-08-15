@@ -234,7 +234,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* --- Background video --- */
 
 .swiss .bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0;
   background: var(--bg);
@@ -251,7 +251,7 @@ input[type="range"]::-webkit-slider-thumb {
   z-index: 0;
 }
 
-/* --- Page frame: one viewport, 3 vertical regions --- */
+/* --- Page frame: first viewport, 3 vertical regions; page scrolls past it --- */
 
 .swiss .page {
   position: relative;
@@ -259,9 +259,8 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
   padding: clamp(16px, 2.4vh, 28px) clamp(14px, 3vw, 32px);
 }
 
@@ -617,6 +616,439 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--muted);
   font-size: clamp(11px, 1.2vw, 12.5px);
   line-height: 1.3;
+}
+
+/* --- 3b) Pricing --- */
+
+html {
+  scroll-behavior: smooth;
+}
+
+.swiss .pricing {
+  width: 100%;
+  max-width: 1080px;
+  margin-top: clamp(28px, 5vh, 56px);
+  margin-bottom: clamp(20px, 4vh, 40px);
+  padding: clamp(28px, 4vw, 48px);
+  border-radius: 36px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.swiss .pricing-head {
+  text-align: center;
+  margin-bottom: clamp(24px, 3.5vw, 40px);
+}
+
+.swiss .pricing-eyebrow {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: clamp(11px, 1.2vw, 12.5px);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.swiss .pricing-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(24px, 4.4vw, 44px);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.swiss .pricing-sub {
+  font-family: var(--font-sans);
+  font-size: clamp(13px, 1.4vw, 15px);
+  color: var(--muted);
+  max-width: 460px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.swiss .pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(12px, 1.8vw, 20px);
+  align-items: stretch;
+}
+
+.swiss .price-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(20px, 2.4vw, 28px);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s ease, box-shadow 0.35s ease;
+}
+
+.swiss .price-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+}
+
+.swiss .price-card.featured {
+  background: #fff;
+  border-color: #fff;
+  color: #111;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 34px rgba(255, 255, 255, 0.22);
+}
+
+.swiss .price-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.swiss .price-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.swiss .price-card.featured .price-name {
+  color: #111;
+}
+
+.swiss .price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 12px 0 2px;
+}
+
+.swiss .price-num {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(30px, 3.4vw, 40px);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--text);
+}
+
+.swiss .price-card.featured .price-num {
+  color: #111;
+}
+
+.swiss .price-per {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.swiss .price-card.featured .price-per {
+  color: #666;
+}
+
+.swiss .price-desc {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.swiss .price-card.featured .price-desc {
+  color: #555;
+}
+
+.swiss .price-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+}
+
+.swiss .price-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  color: #d6d6d6;
+}
+
+.swiss .price-card.featured .price-features li {
+  color: #333;
+}
+
+.swiss .price-check {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: var(--text);
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+}
+
+.swiss .price-card.featured .price-check {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+
+.swiss .price-cta {
+  margin-top: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: clamp(13px, 1.4vw, 14px);
+  padding: clamp(11px, 1.4vh, 13px) 20px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.3s ease, color 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.swiss .price-cta:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.swiss .price-card.featured .price-cta {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.swiss .price-card.featured .price-cta:hover {
+  background: #2a2a2a;
+  border-color: #2a2a2a;
+}
+
+.swiss .pricing-note {
+  text-align: center;
+  margin-top: 22px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+@media (max-width: 900px) {
+  .swiss .pricing-grid {
+    grid-template-columns: 1fr;
+    max-width: 460px;
+    margin: 0 auto;
+  }
+
+  .swiss .price-badge {
+    top: -12px;
+  }
+}
+
+/* ================================================================== */
+/* Auth page                                                          */
+/* ================================================================== */
+
+.swiss .auth-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
+}
+
+.swiss .auth-wrap {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: clamp(20px, 4vh, 40px) 16px;
+}
+
+.swiss .auth-logo {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--nav-shadow);
+  display: grid;
+  place-items: center;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.swiss .auth-logo:hover {
+  transform: scale(1.05);
+}
+
+.swiss .auth-logo img {
+  width: 68%;
+  height: 68%;
+  object-fit: contain;
+  display: block;
+}
+
+.swiss .auth-card {
+  width: min(420px, 92vw);
+  background: #fff;
+  color: var(--nav-text);
+  border-radius: 28px;
+  padding: 26px 24px 22px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  animation: menuIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.swiss .auth-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(20px, 3.2vw, 26px);
+  letter-spacing: -0.03em;
+  color: var(--nav-text);
+  margin: 0;
+}
+
+.swiss .auth-close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: #f1f1f3;
+  color: #555;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.swiss .auth-close:hover {
+  background: #e4e4e8;
+  color: #111;
+}
+
+.swiss .auth-toggle {
+  display: flex;
+  gap: 4px;
+  background: #f1f1f3;
+  border-radius: 999px;
+  padding: 4px;
+  margin: 20px 0;
+}
+
+.swiss .auth-toggle button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #777;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.swiss .auth-toggle button.active {
+  background: #111;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.swiss .auth-error {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: #d64545;
+  margin: 0;
+}
+
+.swiss .auth-submit {
+  margin-top: 6px;
+  border: none;
+  background: #111;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14.5px;
+  padding: 14px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+
+.swiss .auth-submit:hover {
+  background: #2a2a2a;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.45);
+}
+
+.swiss .auth-hint {
+  display: block;
+  text-align: center;
+  margin-top: 16px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  color: #999;
+}
+
+.swiss .auth-footer {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.swiss .auth-footer a {
+  color: #d0d0d0;
+  text-decoration: none;
+  transition: color 0.25s ease;
+}
+
+.swiss .auth-footer a:hover {
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swiss .auth-card {
+    animation: none;
+  }
 }
 
 /* --- Mobile menu (≤720px) --- */

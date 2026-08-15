@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { StudioShell } from "@/components/studio/StudioShell";
+import { RequireAuth } from "@/components/studio/RequireAuth";
 
 export const metadata: Metadata = {
   title: "Studio — ittyclip",
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function StudioPage() {
-  return <StudioShell />;
+  return (
+    <RequireAuth>
+      <StudioShell />
+    </RequireAuth>
+  );
 }

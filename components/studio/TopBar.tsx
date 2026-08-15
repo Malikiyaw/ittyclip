@@ -1,15 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useStudio } from "@/store/studio";
+import { useAuth } from "@/store/auth";
 import { fmtClock } from "@/lib/types";
 
 export function TopBar({ onExport }: { onExport: () => void }) {
+  const router = useRouter();
   const media = useStudio((s) => s.media);
   const clips = useStudio((s) => s.clips);
   const analyzing = useStudio((s) => s.analyzing);
   const showToast = useStudio((s) => s.showToast);
   const exportState = useStudio((s) => s.exportState);
+  const session = useAuth((s) => s.session);
+  const logout = useAuth((s) => s.logout);
+
+  const signOut = () => {
+    logout();
+    useStudio.getState().reset();
+    router.push("/");
+  };
 
   const saveProject = () => {
     const json = useStudio.getState().exportProject();
@@ -51,6 +62,11 @@ export function TopBar({ onExport }: { onExport: () => void }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {session && (
+          <span className="hidden max-w-[140px] truncate font-mono text-[10px] text-mute lg:inline">
+            {session.name || session.email}
+          </span>
+        )}
         {media && (
           <>
             <button
@@ -68,6 +84,12 @@ export function TopBar({ onExport }: { onExport: () => void }) {
             </button>
           </>
         )}
+        <button
+          onClick={signOut}
+          className="rounded-full border border-hot/40 px-3 py-1.5 text-xs font-medium text-hot transition-colors hover:bg-hot/10"
+        >
+          Sign out
+        </button>
       </div>
     </header>
   );
