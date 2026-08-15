@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useStudio } from "@/store/studio";
+import { classifyLink } from "@/lib/linkDetect";
+import { importFromLink } from "@/lib/importLink";
 
 export function UploadZone() {
   const ingest = useStudio((s) => s.ingest);
@@ -13,6 +15,33 @@ export function UploadZone() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [fileSizeWarn, setFileSizeWarn] = useState(false);
+  const [url, setUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importError, setImportError] = useState<string | null>(null);
+  const busy = analyzing || importing;
+
+  const handleImport = async () => {
+    const raw = url.trim();
+    if (!raw || busy) return;
+    if (classifyLink(raw) === "platform") {
+      setImportError(
+        "Platform pages (YouTube · TikTok · Reels) aren't directly downloadable — paste a direct .mp4/.webm link instead."
+      );
+      return;
+    }
+    setImportError(null);
+    setImportProgress(0);
+    setImporting(true);
+    try {
+      await importFromLink(raw, (mb) => setImportProgress(mb));
+      setUrl("");
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed — try a different link.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleFile = (file: File | undefined | null) => {
     if (!file) return;
@@ -35,8 +64,8 @@ export function UploadZone() {
           role="button"
           tabIndex={0}
           aria-label="Upload a video"
-          onClick={() => !analyzing && inputRef.current?.click()}
-          onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+          onClick={() => !busy && inputRef.current?.click()}
+          onKeyDown={(e) => e.key === "Enter" && !busy && inputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
             setDrag(true);
@@ -51,7 +80,7 @@ export function UploadZone() {
             drag
               ? "scale-[1.015] border-white/70 bg-white/[0.06] shadow-[0_0_60px_rgba(255,255,255,0.12)]"
               : "border-white/20 bg-white/[0.03]"
-          } ${analyzing ? "cursor-wait" : "cursor-pointer"}`}
+          } ${busy ? "cursor-wait" : "cursor-pointer"}`}
         >
           <input
             ref={inputRef}
@@ -103,6 +132,62 @@ export function UploadZone() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="s-display text-sm uppercase tracking-[0.2em] text-white/80">
+              Or import from a link
+            </h3>
+            <span className="s-chip">direct .mp4 · webm · mov</span>
+          </div>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleImport();
+            }}
+          >
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                if (importError) setImportError(null);
+              }}
+              placeholder="https://example.com/video.mp4"
+              aria-label="Video link"
+              disabled={busy}
+              className="h-11 flex-1 rounded-xl border border-white/15 bg-black/40 px-4 font-mono text-xs text-white placeholder-white/30 outline-none transition-colors focus:border-white/60"
+            />
+            <button
+              type="submit"
+              disabled={busy || !url.trim()}
+              className="h-11 rounded-xl bg-white px-5 text-xs font-semibold tracking-wide text-black transition-opacity hover:opacity-85 disabled:opacity-40"
+            >
+              {importing ? "Downloading…" : "Import"}
+            </button>
+          </form>
+
+          {importing && (
+            <div className="mt-4">
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="font-mono text-[11px] text-white/70">
+                  Downloading video · {Math.round(importProgress)} MB
+                </p>
+                <p className="font-mono text-[11px] text-white/40">importing</p>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full animate-pulse rounded-full bg-white" />
+              </div>
+            </div>
+          )}
+
+          {importError && (
+            <p className="mt-3 text-[11px] leading-relaxed text-white/60" role="alert">
+              {importError}
+            </p>
           )}
         </div>
 
