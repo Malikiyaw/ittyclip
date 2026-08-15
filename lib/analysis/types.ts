@@ -8,7 +8,7 @@ export interface HighlightScore {
   quotability: number;
   completeness: number;
   boundary: number;
-  /** Optional for legacy saved projects; new analysis always populates it. */
+  /** Optional so legacyRanked() and older saved projects remain type-safe. */
   visual?: number;
   total: number;
 }
