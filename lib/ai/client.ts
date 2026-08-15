@@ -9,13 +9,40 @@ export interface AiPayload {
   count: number;
 }
 
-/** Caps transcript size for the model while preserving even coverage. */
+/**
+ * Caps transcript size while preserving temporal coverage.
+ * The old implementation sampled every Nth line, which could discard a
+ * dense hook/reveal entirely. Keep a time-distributed set of lines instead.
+ */
 export function trimTranscript(lines: AiTranscriptLine[], maxChars = 14000): AiTranscriptLine[] {
+  if (lines.length === 0) return [];
   const total = lines.reduce((n, l) => n + l.text.length, 0);
   if (total <= maxChars) return lines;
-  const ratio = maxChars / total;
-  const step = Math.max(1, Math.round(1 / ratio));
-  return lines.filter((_, i) => i % step === 0).slice(0, 400);
+
+  const avgChars = Math.max(1, total / lines.length);
+  const targetLines = Math.max(1, Math.min(400, Math.floor(maxChars / avgChars)));
+  if (targetLines >= lines.length) return lines;
+
+  const selected: AiTranscriptLine[] = [];
+  const seen = new Set<number>();
+  for (let i = 0; i < targetLines; i++) {
+    const index = Math.min(lines.length - 1, Math.floor((i * (lines.length - 1)) / Math.max(1, targetLines - 1)));
+    if (!seen.has(index)) {
+      selected.push(lines[index]);
+      seen.add(index);
+    }
+  }
+
+  // If a few unusually long lines pushed us over the budget, trim by adding
+  // lines in temporal order until the character budget is reached.
+  const out: AiTranscriptLine[] = [];
+  let chars = 0;
+  for (const line of selected.sort((a, b) => a.start - b.start)) {
+    if (chars + line.text.length > maxChars && out.length > 0) continue;
+    out.push(line);
+    chars += line.text.length;
+  }
+  return out.slice(0, 400);
 }
 
 export interface AiResponse {
@@ -55,6 +82,11 @@ export async function requestAiHighlights(
     }
     onStage?.(0.9, "Formatting results…");
     return { model: data.model ?? "unknown", highlights: data.highlights, count: data.highlights.length };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("AI request timed out after 120 seconds.");
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
