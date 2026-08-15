@@ -24,6 +24,8 @@ export function Timeline() {
   const activeClipId = useStudio((s) => s.activeClipId);
   const zoom = useStudio((s) => s.zoom);
   const setZoom = useStudio((s) => s.setZoom);
+  const highlights = useStudio((s) => s.pendingHighlights);
+  const captions = useStudio((s) => s.captions);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -33,6 +35,19 @@ export function Timeline() {
 
   const duration = media?.duration || 0;
   const contentWidth = useMemo(() => Math.min(duration * zoom + 240, 40000), [duration, zoom]);
+
+  const bounds = useMemo(() => {
+    const set = new Set<number>();
+    for (const h of highlights) {
+      set.add(h.start);
+      set.add(h.end);
+    }
+    for (const c of clips) {
+      set.add(c.start);
+      set.add(c.end);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [highlights, clips]);
 
   usePlayheadRaf((t) => {
     const el = playheadRef.current;
@@ -49,6 +64,21 @@ export function Timeline() {
   });
 
   const clamp = (v: number) => Math.min(Math.max(0, v), Math.max(0.01, duration));
+
+  const SNAP_PX = 10;
+  const snap = (v: number) => {
+    const thr = SNAP_PX / zoom;
+    let best = v;
+    let bestD = thr;
+    for (const b of bounds) {
+      const d = Math.abs(b - v);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
+  };
 
   const beginDrag = (e: React.PointerEvent, clipId: string, mode: DragState["mode"]) => {
     e.preventDefault();
@@ -70,15 +100,19 @@ export function Timeline() {
       const s = useStudio.getState();
       if (d.mode === "move") {
         const len = d.origEnd - d.origStart;
-        let start = clamp(d.origStart + delta);
+        const raw = clamp(d.origStart + delta);
+        const byStart = snap(raw);
+        const byEnd = snap(raw + len) - len;
+        const chosen = Math.abs(byStart - raw) <= Math.abs(byEnd - raw) ? byStart : byEnd;
+        let start = clamp(chosen);
         if (start + len > duration) start = Math.max(0, duration - len);
         s.updateClip(d.clipId, { start, end: start + len });
       } else if (d.mode === "trim-start") {
-        let start = clamp(d.origStart + delta);
+        let start = clamp(snap(d.origStart + delta));
         if (d.origEnd - start < MIN_LEN) start = d.origEnd - MIN_LEN;
         s.updateClip(d.clipId, { start });
       } else {
-        let end = clamp(d.origEnd + delta);
+        let end = clamp(snap(d.origEnd + delta));
         if (end - d.origStart < MIN_LEN) end = d.origStart + MIN_LEN;
         s.updateClip(d.clipId, { end });
       }
@@ -103,7 +137,7 @@ export function Timeline() {
   }
 
   return (
-    <div className="flex h-44 shrink-0 flex-col border-t border-white/10 bg-black/80">
+    <div className="flex h-60 shrink-0 flex-col border-t border-white/10 bg-black/80">
       <div className="flex items-center gap-3 border-b border-white/10 px-4 py-2">
         <span className="s-display text-sm text-white">Timeline</span>
         <span className="font-mono text-[10px] text-white/45">
@@ -160,7 +194,30 @@ export function Timeline() {
             ))}
           </div>
 
-          <div className="absolute top-[56px] bottom-0 left-0" style={{ width: contentWidth }}>
+          <div className="absolute top-[55px] bottom-0 left-0" style={{ width: contentWidth }}>
+            {captions.length > 0 && <div className="absolute top-0 right-0 left-0 h-7 border-b border-white/10" aria-hidden />}
+            {captions.slice(0, 600).map((line) =>
+              line.words.map((w, wi) => {
+                const left = w.start * zoom;
+                const width = Math.max(2, (w.end - w.start) * zoom);
+                return (
+                  <button
+                    key={`${line.id}-${wi}`}
+                    title={w.text}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      useStudio.getState().setPlayhead(w.start);
+                    }}
+                    className="absolute top-1.5 h-3.5 cursor-pointer rounded-sm border border-white/15 bg-white/15 transition-colors hover:border-white/60 hover:bg-white/45"
+                    style={{ left, width }}
+                    aria-label={`Caption word: ${w.text}`}
+                  />
+                );
+              })
+            )}
+          </div>
+
+          <div className="absolute top-[86px] bottom-0 left-0" style={{ width: contentWidth }}>
             {clips.map((clip) => {
               const left = clip.start * zoom;
               const width = Math.max(6, (clip.end - clip.start) * zoom);
@@ -192,14 +249,15 @@ export function Timeline() {
                   />
                   <div className="pointer-events-none flex h-full items-center justify-between px-2.5">
                     <span
-                      className={`truncate font-mono text-[9px] font-semibold ${
+                      className={`truncate text-[9px] font-semibold ${
                         active ? "text-black" : "text-white/90"
                       }`}
+                      title={clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}
                     >
-                      {fmtClock(clip.start)} → {fmtClock(clip.end)}
+                      {clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}
                     </span>
-                    <span className={`font-mono text-[9px] ${active ? "text-black/60" : "text-white/60"}`}>
-                      {clip.score}
+                    <span className={`ml-1 shrink-0 font-mono text-[9px] ${active ? "text-black/60" : "text-white/60"}`}>
+                      {clip.score?.toFixed(0) ?? ""}
                     </span>
                   </div>
                   {active && (
