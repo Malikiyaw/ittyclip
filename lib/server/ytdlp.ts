@@ -1,10 +1,29 @@
 import { execFile } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, renameSync } from "node:fs";
 import { chmod } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
-const BIN_DIR = path.join(process.cwd(), ".cache", "yt-dlp");
 const RESOLVE_TIMEOUT_MS = 60_000;
+
+function resolveBinDir(): string {
+  const candidates: string[] = [];
+  const envDir = process.env.YTDLP_DIR?.trim();
+  if (envDir) candidates.push(path.resolve(envDir));
+  candidates.push(path.join(process.cwd(), ".cache", "yt-dlp"));
+  candidates.push(path.join(os.tmpdir(), "ittyclip", "yt-dlp"));
+  for (const dir of candidates) {
+    try {
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    } catch {
+      /* try next writable location */
+    }
+  }
+  return path.join(os.tmpdir(), "ittyclip", "yt-dlp");
+}
+
+const BIN_DIR = resolveBinDir();
 
 const ASSETS: Record<string, string> = {
   "win32-x64": "yt-dlp.exe",
@@ -26,6 +45,13 @@ async function downloadBinary(): Promise<string> {
   if (existsSync(binPath)) return binPath;
   if (binaryPromise) return binaryPromise;
   binaryPromise = (async () => {
+    try {
+      mkdirSync(BIN_DIR, { recursive: true });
+    } catch {
+      throw new Error(
+        "Couldn't set up the yt-dlp downloader — no writable directory available. Set YTDLP_DIR to a writable path."
+      );
+    }
     const asset = path.basename(binPath);
     const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${asset}`;
     mkdirSync(BIN_DIR, { recursive: true });
