@@ -13,8 +13,15 @@ const ASPECT_BUTTONS: { key: AspectKey; label: string }[] = [
   { key: "16:9", label: "16:9" },
 ];
 
+function isSafariBrowser() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|Android/i.test(ua);
+}
+
 export function Preview() {
   const media = useStudio((s) => s.media);
+  const source = useStudio((s) => s.source);
   const aspect = useStudio((s) => s.aspect);
   const playhead = useStudio((s) => s.playhead);
   const isPlaying = useStudio((s) => s.isPlaying);
@@ -38,15 +45,39 @@ export function Preview() {
     return () => query.removeEventListener?.("change", update);
   }, []);
 
+  // iOS Safari has historically had unreliable range/seek behavior with blob
+  // URLs. Safari uniquely supports assigning a File/Blob directly to
+  // HTMLMediaElement.srcObject, so use the original File there. Other browsers
+  // keep the portable blob URL path.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !media) return;
     setVideoError(null);
     video.pause();
-    video.currentTime = 0;
-    // Explicit load is important for iOS Safari after swapping blob URLs.
-    video.load();
-  }, [media?.url]);
+
+    const safariFilePath = isSafariBrowser() && source && "srcObject" in video;
+    if (safariFilePath) {
+      try {
+        video.removeAttribute("src");
+        video.srcObject = source;
+        video.load();
+      } catch {
+        video.srcObject = null;
+        video.src = media.url;
+        video.load();
+      }
+    } else {
+      video.srcObject = null;
+      video.src = media.url;
+      video.load();
+    }
+
+    return () => {
+      try { video.pause(); } catch {}
+      try { video.srcObject = null; } catch {}
+      video.removeAttribute("src");
+    };
+  }, [media?.url, source]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -70,6 +101,7 @@ export function Preview() {
       const start = async () => {
         try {
           await video.play();
+          setVideoError(null);
         } catch (err) {
           setPlaying(false);
           const message = err instanceof DOMException && err.name === "NotAllowedError"
@@ -127,11 +159,7 @@ export function Preview() {
       <div className="studio-preview-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-black p-3 sm:p-6">
         <div className="studio-grid" aria-hidden />
         <span className="absolute top-4 left-5 z-10 font-mono text-[10px] tracking-[0.3em] text-white/30 uppercase">preview</span>
-        {reframe.status !== "idle" && (
-          <span className="absolute top-4 right-5 z-10 rounded-full border border-white/20 bg-black/60 px-3 py-1 font-mono text-[9px] tracking-wider text-white/70 uppercase backdrop-blur">
-            {reframe.status === "done" ? "auto-reframe" : reframe.status === "error" ? "center crop" : "tracking…"}
-          </span>
-        )}
+        {reframe.status !== "idle" && <span className="absolute top-4 right-5 z-10 rounded-full border border-white/20 bg-black/60 px-3 py-1 font-mono text-[9px] tracking-wider text-white/70 uppercase backdrop-blur">{reframe.status === "done" ? "auto-reframe" : reframe.status === "error" ? "center crop" : "tracking…"}</span>}
         <div className="relative flex h-full max-h-full min-h-0 max-w-full items-center justify-center" style={{ aspectRatio: ratio }}>
           {isVertical && <div className="pointer-events-none absolute -inset-3 z-10 rounded-[36px] border border-white/15 bg-black/50" aria-hidden />}
           {isVertical && <div className="pointer-events-none absolute -top-1.5 left-1/2 z-10 h-3.5 w-16 -translate-x-1/2 rounded-full bg-black ring-1 ring-white/25" aria-hidden />}
@@ -139,7 +167,6 @@ export function Preview() {
           <video
             key={media.url}
             ref={videoRef}
-            src={media.url}
             className="h-full w-full rounded-2xl bg-black object-contain shadow-[0_40px_100px_rgba(0,0,0,0.85)] ring-1 ring-white/15"
             style={reframeTransform ?? undefined}
             playsInline
@@ -152,12 +179,7 @@ export function Preview() {
           />
           <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/10" aria-hidden />
           <CaptionOverlay />
-          {videoError && (
-            <div className="absolute inset-x-3 bottom-3 z-30 rounded-2xl border border-white/15 bg-black/85 p-3 text-center backdrop-blur">
-              <p className="text-[11px] leading-relaxed text-white/75">{videoError}</p>
-              <button type="button" onClick={() => { setVideoError(null); videoRef.current?.load(); }} className="mt-2 rounded-full border border-white/25 px-3 py-1.5 text-[10px] text-white/80">Retry video</button>
-            </div>
-          )}
+          {videoError && <div className="absolute inset-x-3 bottom-3 z-30 rounded-2xl border border-white/15 bg-black/85 p-3 text-center backdrop-blur"><p className="text-[11px] leading-relaxed text-white/75">{videoError}</p><button type="button" onClick={() => { setVideoError(null); const v = videoRef.current; if (v) { if (isSafariBrowser() && source && "srcObject" in v) v.srcObject = source; else v.src = media.url; v.load(); } }} className="mt-2 rounded-full border border-white/25 px-3 py-1.5 text-[10px] text-white/80">Retry video</button></div>}
           {showSafeZones && <div className="pointer-events-none absolute inset-0 z-20 rounded-2xl" aria-hidden><div className="absolute inset-y-0 right-0 w-[22%] border-l border-dashed border-white/30 bg-white/[0.04]" /><div className="absolute right-0 bottom-0 left-0 h-[12%] border-t border-dashed border-white/30 bg-white/[0.04]" /><div className="absolute inset-x-0 top-0 h-[10%] border-b border-dashed border-white/30 bg-white/[0.04]" /><span className="absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-0.5 font-mono text-[8px] tracking-widest text-white/60 uppercase">UI safe zones (TikTok · Reels · Shorts)</span></div>}
           {isPlaying && <div className="pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 backdrop-blur"><span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-white" /><span className="font-mono text-[10px] tracking-[0.25em] text-white/90 uppercase">CLIPPING</span></div>}
           {isVertical && <span className="pointer-events-none absolute -bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-3 py-1 font-mono text-[9px] tracking-[0.25em] text-white/50 uppercase backdrop-blur">shorts preview</span>}
