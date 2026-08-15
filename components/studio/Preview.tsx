@@ -45,8 +45,6 @@ export function Preview() {
           setPlaying(false);
           return;
         }
-        // Commit the playhead at ~30fps instead of every frame to cut
-        // re-render churn while the preview plays.
         if (frame % 2 === 0) tick(video.currentTime);
         frame++;
       };
@@ -61,9 +59,6 @@ export function Preview() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !media) return;
-    // During playback the video advances itself; seeking here every frame
-    // would fight the playback and cause stutter. Only sync the seek when
-    // the user scrubs or the clip moves while paused.
     if (isPlaying) return;
     if (Math.abs(video.currentTime - playhead) > 0.03) {
       video.currentTime = Math.min(playhead, Math.max(0, (media.duration || 0) - 0.01));
@@ -75,21 +70,19 @@ export function Preview() {
   const ratio = ASPECTS[aspect].ratio;
   const isVertical = aspect === "9:16";
 
-  // Simulated reframe transform — same math as the export crop.
   const reframeTransform = useMemo(() => {
     if (!reframe.enabled || reframe.scale <= 1) return null;
     const crop = reframeCropAt(playhead, media.width, media.height, ratio, reframe);
     const scaleX = media.width / crop.w;
     const scaleY = media.height / crop.h;
-    // translate so the crop window centers in the frame, then scale up.
     const tx = (0.5 - (crop.x + crop.w / 2) / media.width) * media.width;
     const ty = (0.5 - (crop.y + crop.h / 2) / media.height) * media.height;
     return { transform: `translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})` };
   }, [reframe, playhead, media.width, media.height, ratio]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
+    <div className="studio-preview flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="studio-preview-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
         <div className="studio-grid" aria-hidden />
         <span className="absolute top-4 left-5 z-10 font-mono text-[10px] tracking-[0.3em] text-white/30 uppercase">
           preview
@@ -99,18 +92,12 @@ export function Preview() {
             {reframe.status === "done" ? "auto-reframe" : reframe.status === "error" ? "center crop" : "tracking…"}
           </span>
         )}
-        <div className="relative h-full max-h-full" style={{ aspectRatio: ratio }}>
+        <div className="relative h-full max-h-full max-w-full" style={{ aspectRatio: ratio }}>
           {isVertical && (
-            <div
-              className="pointer-events-none absolute -inset-3 z-10 rounded-[36px] border border-white/15 bg-black/50"
-              aria-hidden
-            />
+            <div className="pointer-events-none absolute -inset-3 z-10 rounded-[36px] border border-white/15 bg-black/50" aria-hidden />
           )}
           {isVertical && (
-            <div
-              className="pointer-events-none absolute -top-1.5 left-1/2 z-10 h-3.5 w-16 -translate-x-1/2 rounded-full bg-black ring-1 ring-white/25"
-              aria-hidden
-            />
+            <div className="pointer-events-none absolute -top-1.5 left-1/2 z-10 h-3.5 w-16 -translate-x-1/2 rounded-full bg-black ring-1 ring-white/25" aria-hidden />
           )}
           {isVertical && (
             <div className="pointer-events-none absolute top-1/2 -right-3 z-10 flex -translate-y-1/2 flex-col gap-3" aria-hidden>
@@ -122,10 +109,11 @@ export function Preview() {
           <video
             ref={videoRef}
             src={media.url}
-            className="h-full w-full rounded-2xl bg-black object-cover shadow-[0_40px_100px_rgba(0,0,0,0.85)] ring-1 ring-white/15"
+            className="h-full w-full rounded-2xl bg-black object-contain shadow-[0_40px_100px_rgba(0,0,0,0.85)] ring-1 ring-white/15"
             style={reframeTransform ?? undefined}
             playsInline
             muted
+            preload="metadata"
           />
           <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/10" aria-hidden />
           <CaptionOverlay />
@@ -156,7 +144,7 @@ export function Preview() {
         </div>
       </div>
 
-      <div className="flex h-16 shrink-0 items-center gap-4 border-t border-white/10 bg-black px-5">
+      <div className="studio-preview-controls flex h-16 shrink-0 items-center gap-4 border-t border-white/10 bg-black px-5">
         <button
           onClick={() => setPlaying(!isPlaying)}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.25)] transition-transform hover:scale-105"
@@ -190,7 +178,7 @@ export function Preview() {
           ))}
         </div>
 
-        <span className="hidden font-mono text-xs whitespace-nowrap text-white/60 tabular-nums md:inline">
+        <span className="hidden font-mono text-xs whitespace-nowrap text-white/60 md:inline">
           {fmtClock(playhead)} / {fmtClock(duration)}
         </span>
 
