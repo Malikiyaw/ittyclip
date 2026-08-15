@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useStudio } from "@/store/studio";
 import { useAuth } from "@/store/auth";
 import { fmtClock } from "@/lib/types";
@@ -46,6 +46,7 @@ export function TopBar({ onExport }: { onExport: () => void }) {
   };
 
   const loadProject = (file: File) => {
+    if (dirty && !window.confirm("Discard unsaved changes and load this project?")) return;
     const reader = new FileReader();
     reader.onload = () => {
       const text = typeof reader.result === "string" ? reader.result : "";
@@ -58,6 +59,22 @@ export function TopBar({ onExport }: { onExport: () => void }) {
     reader.onerror = () => showToast("Could not read that file.");
     reader.readAsText(file);
   };
+
+  const confirmNew = () => {
+    if (dirty && !window.confirm("Discard unsaved changes and start fresh?")) return;
+    newProject();
+  };
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (useStudio.getState().dirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b border-white/10 bg-black px-5">
@@ -131,7 +148,7 @@ export function TopBar({ onExport }: { onExport: () => void }) {
         </button>
         {media && (
           <>
-            <button onClick={newProject} className="s-btn" title="Start a fresh timeline">
+            <button onClick={confirmNew} className="s-btn" title="Start a fresh timeline">
               New
             </button>
             <button onClick={saveProject} className="s-btn">

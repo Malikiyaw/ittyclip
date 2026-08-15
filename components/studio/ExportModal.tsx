@@ -23,8 +23,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const [burn, setBurn] = useState(true);
   const [watermark, setWatermark] = useState(true);
   const [scope, setScope] = useState<"all" | "active">("all");
+  const [separate, setSeparate] = useState(false);
   const [doneName, setDoneName] = useState("");
   const [error, setError] = useState("");
+  const [results, setResults] = useState<{ name: string; url: string }[]>([]);
+  const [stage, setStage] = useState("");
 
   if (!open) return null;
 
@@ -44,12 +47,15 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
 
   const run = async () => {
     setError("");
+    setResults([]);
+    setStage("");
     const s = useStudio.getState();
     const source = s.source;
     if (!source || !s.media) {
       showToast("Upload a video first");
       return;
     }
+    const doSeparate = separate && s.clips.length > 1 && scope === "all";
     const targetClips =
       s.clips.length > 0
         ? (scope === "active"
@@ -63,6 +69,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         : undefined;
 
     s.setExportState("loading", 0.02, null);
+    const made: { name: string; url: string }[] = [];
     try {
       const { exportVideo, supportsBrowserEncoding } = await import("@/lib/ffmpeg");
       if (!supportsBrowserEncoding()) {
@@ -70,8 +77,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
           "In-browser encoding needs SharedArrayBuffer. Open ittyclip in Chrome, Edge, or Firefox (not Safari, or enable site isolation flags)."
         );
       }
-      const { blob, name } = await exportVideo(source, {
-        segments: targetClips,
+      const baseOpts = {
         captions: burn ? s.captions : [],
         aspect: s.aspect,
         format,
@@ -80,15 +86,39 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         watermark,
         captionSettings: s.captionSettings,
         reframe: s.reframe,
-        clipName,
-        onProgress: (p) => s.setExportState("running", p, null),
-      });
-      if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl);
-      const url = URL.createObjectURL(blob);
-      s.setExportState("done", 1, url);
-      setDoneName(name);
-      showToast("Export ready");
+      };
+      if (doSeparate) {
+        for (let i = 0; i < targetClips.length; i++) {
+          setStage(`Encoding clip ${i + 1} of ${targetClips.length}`);
+          const clip = s.clips.find((c) => c.start === targetClips[i].start && c.end === targetClips[i].end);
+          const { blob, name } = await exportVideo(source, {
+            ...baseOpts,
+            segments: [targetClips[i]],
+            clipName: clip?.label,
+            onProgress: (p) => s.setExportState("running", (i + p) / targetClips.length, null),
+          });
+          made.push({ name, url: URL.createObjectURL(blob) });
+        }
+        if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl);
+        s.setExportState("done", 1, made[made.length - 1].url);
+        setResults(made);
+        setDoneName(`${made.length} files`);
+        showToast(`${made.length} clips exported`);
+      } else {
+        const { blob, name } = await exportVideo(source, {
+          ...baseOpts,
+          segments: targetClips,
+          clipName,
+          onProgress: (p) => s.setExportState("running", p, null),
+        });
+        if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl);
+        const url = URL.createObjectURL(blob);
+        s.setExportState("done", 1, url);
+        setDoneName(name);
+        showToast("Export ready");
+      }
     } catch (err) {
+      for (const r of made) URL.revokeObjectURL(r.url);
       s.setExportState("error", 0, null);
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -137,12 +167,48 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
             >
               Download clip
             </a>
+            {results.length > 0 && (
+              <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3 text-left">
+                <p className="s-label mb-2 text-black/40">
+                  {results.length} files — download individually, or all at once
+                </p>
+                <ul className="max-h-44 overflow-y-auto rounded-xl border border-black/10 bg-white p-1">
+                  {results.map((r) => (
+                    <li key={r.url}>
+                      <a
+                        href={r.url}
+                        download={r.name}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-black/70 transition-colors hover:bg-black/[0.05] hover:text-black"
+                      >
+                        <span className="truncate">{r.name}</span>
+                        <span aria-hidden>↓</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() =>
+                    results.forEach((r) => {
+                      const a = document.createElement("a");
+                      a.href = r.url;
+                      a.download = r.name;
+                      a.click();
+                    })
+                  }
+                  className="mt-2 w-full rounded-full border border-black/15 px-4 py-2.5 text-xs font-medium text-black/70 transition-colors hover:border-black/40 hover:text-black"
+                >
+                  Download all ({results.length})
+                </button>
+              </div>
+            )}
             <button
               onClick={() => {
                 const s = useStudio.getState();
                 if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl);
+                for (const r of results) URL.revokeObjectURL(r.url);
                 s.setExportState("idle", 0, null);
                 setDoneName("");
+                setResults([]);
               }}
               className="mt-3 text-xs text-black/50 hover:text-black"
             >
@@ -162,6 +228,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
               onClick={() => {
                 useStudio.getState().setExportState("idle", 0, null);
                 setError("");
+                setResults([]);
               }}
               className="mt-4 rounded-full border border-black/15 px-5 py-2 text-xs text-black/60 transition-colors hover:border-black/40 hover:text-black"
             >
@@ -173,7 +240,8 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
             <p className="text-sm text-black/60">
               {exportState === "loading"
                 ? "Booting ffmpeg.wasm engine…"
-                : `Encoding in your browser… ${Math.round(exportProgress * 100)}%`}
+                : stage ||
+                  `Encoding in your browser… ${Math.round(exportProgress * 100)}%`}
             </p>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10">
               <div
@@ -212,6 +280,39 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                 </p>
               )}
             </div>
+
+            <button
+              onClick={() => setSeparate(!separate)}
+              disabled={clips.length < 2}
+              className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.03] px-4 py-3 text-xs text-black/70 transition-colors hover:border-black/25 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+              role="switch"
+              aria-checked={separate}
+              title={
+                clips.length < 2
+                  ? "Add at least two clips to export each one as its own file."
+                  : undefined
+              }
+            >
+              <span>
+                One file per clip
+                {clips.length > 1 && (
+                  <span className="ml-1.5 font-mono text-[10px] text-black/40">
+                    ({clips.length} files)
+                  </span>
+                )}
+              </span>
+              <span
+                className={`relative h-5 w-9 rounded-full transition-colors ${
+                  separate ? "bg-black" : "bg-black/15"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                    separate ? "left-4.5" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </button>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
