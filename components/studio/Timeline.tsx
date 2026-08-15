@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useStudio } from "@/store/studio";
 import { WaveformCanvas } from "@/components/studio/WaveformCanvas";
 import { usePlayheadRaf } from "@/hooks/usePlayheadRaf";
 import { fmtClock } from "@/lib/types";
+import { useStudio } from "@/store/studio";
 
 type DragState = {
   mode: "trim-start" | "trim-end" | "move";
@@ -64,7 +64,6 @@ export function Timeline() {
   });
 
   const clamp = (v: number) => Math.min(Math.max(0, v), Math.max(0.01, duration));
-
   const SNAP_PX = 10;
   const snap = (v: number) => {
     const thr = SNAP_PX / zoom;
@@ -85,7 +84,6 @@ export function Timeline() {
     e.stopPropagation();
     const clip = stateRef.current.clips.find((c) => c.id === clipId);
     if (!clip) return;
-    // One history entry per drag gesture — live updates never pollute history.
     useStudio.getState().commitHistory();
     dragRef.current = { mode, clipId, startX: e.clientX, origStart: clip.start, origEnd: clip.end };
     useStudio.getState().setActiveClip(clipId);
@@ -132,18 +130,16 @@ export function Timeline() {
 
   const ticks = [];
   const step = zoom < 40 ? 60 : zoom < 90 ? 30 : zoom < 160 ? 10 : 5;
-  for (let t = 0; t <= duration + 1; t += step) {
-    ticks.push(t);
-  }
+  for (let t = 0; t <= duration + 1; t += step) ticks.push(t);
 
   return (
-    <div className="flex h-60 shrink-0 flex-col border-t border-white/10 bg-black/80">
-      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-2">
-        <span className="s-display text-sm text-white">Timeline</span>
-        <span className="font-mono text-[10px] text-white/45">
+    <div className="studio-timeline flex h-60 min-w-0 shrink-0 flex-col border-t border-white/10 bg-black/80">
+      <div className="studio-timeline-toolbar flex min-w-0 items-center gap-3 border-b border-white/10 px-4 py-2">
+        <span className="s-display shrink-0 text-sm text-white">Timeline</span>
+        <span className="shrink-0 font-mono text-[10px] text-white/45">
           {clips.length} clip{clips.length === 1 ? "" : "s"}
         </span>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-3">
           <span className="font-mono text-[10px] text-white/35">zoom</span>
           <input
             type="range"
@@ -151,7 +147,7 @@ export function Timeline() {
             max={320}
             value={zoom}
             onChange={(e) => setZoom(parseInt(e.target.value))}
-            className="w-32"
+            className="w-32 shrink-0"
             aria-label="Timeline zoom"
           />
           <button
@@ -159,17 +155,16 @@ export function Timeline() {
               useStudio.getState().clearTimeline();
               useStudio.getState().showToast("Timeline cleared");
             }}
-            className="s-btn px-2.5 py-1 text-[10px]"
+            className="s-btn shrink-0 px-2.5 py-1 text-[10px]"
           >
             clear
           </button>
         </div>
       </div>
 
-      <div ref={scrollRef} className="relative flex-1 overflow-x-auto overflow-y-hidden">
+      <div ref={scrollRef} className="relative min-w-0 flex-1 touch-pan-x overflow-x-auto overflow-y-hidden">
         <div className="relative h-full" style={{ width: contentWidth }}>
           <WaveformCanvas envelope={analysis?.envelope ?? null} zoom={zoom} duration={duration} />
-
           <div className="absolute top-[54px] right-0 left-0 h-px bg-white/10" aria-hidden />
 
           <div
@@ -225,7 +220,7 @@ export function Timeline() {
               return (
                 <div
                   key={clip.id}
-                  className={`group absolute top-1 bottom-1 rounded-lg border transition-shadow ${
+                  className={`group absolute top-1 bottom-1 touch-none rounded-lg border transition-shadow ${
                     active
                       ? "border-white bg-white shadow-[0_0_28px_rgba(255,255,255,0.25)]"
                       : "border-white/25 bg-white/10 hover:border-white/60"
@@ -234,26 +229,21 @@ export function Timeline() {
                   onPointerDown={(e) => beginDrag(e, clip.id, "move")}
                 >
                   <div
-                    className={`absolute top-0 bottom-0 -left-1 w-2 cursor-ew-resize rounded-l-md transition-colors ${
+                    className={`absolute top-0 bottom-0 -left-1 w-3 cursor-ew-resize rounded-l-md transition-colors ${
                       active ? "bg-black/20" : "bg-transparent group-hover:bg-white/40"
                     }`}
                     onPointerDown={(e) => beginDrag(e, clip.id, "trim-start")}
                     aria-hidden
                   />
                   <div
-                    className={`absolute top-0 bottom-0 -right-1 w-2 cursor-ew-resize rounded-r-md transition-colors ${
+                    className={`absolute top-0 bottom-0 -right-1 w-3 cursor-ew-resize rounded-r-md transition-colors ${
                       active ? "bg-black/20" : "bg-transparent group-hover:bg-white/40"
                     }`}
                     onPointerDown={(e) => beginDrag(e, clip.id, "trim-end")}
                     aria-hidden
                   />
                   <div className="pointer-events-none flex h-full items-center justify-between px-2.5">
-                    <span
-                      className={`truncate text-[9px] font-semibold ${
-                        active ? "text-black" : "text-white/90"
-                      }`}
-                      title={clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}
-                    >
+                    <span className={`truncate text-[9px] font-semibold ${active ? "text-black" : "text-white/90"}`} title={clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}>
                       {clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}
                     </span>
                     <span className={`ml-1 shrink-0 font-mono text-[9px] ${active ? "text-black/60" : "text-white/60"}`}>
@@ -261,10 +251,7 @@ export function Timeline() {
                     </span>
                   </div>
                   {active && (
-                    <div
-                      className="pointer-events-none absolute -top-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-black shadow-[0_0_8px_rgba(0,0,0,0.8)]"
-                      aria-hidden
-                    />
+                    <div className="pointer-events-none absolute -top-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-black shadow-[0_0_8px_rgba(0,0,0,0.8)]" aria-hidden />
                   )}
                 </div>
               );
