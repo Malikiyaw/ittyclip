@@ -52,7 +52,9 @@ function buildDrawtext(lines: CaptionLine[], segmentOffsets: number[], res: numb
     const fontsize = Math.round(res * 0.052 * settings.size), boxH = Math.round(fontsize * 0.55);
     const hasBox = settings.background !== "none", boxAlpha = hasBox ? settings.backgroundOpacity : 0;
     const text = settings.uppercase ? line.text.toUpperCase() : line.text;
-    filters.push(`drawtext=fontfile=/font.ttf:text='${escapeDrawtextAlpha(text)}':fontsize=${fontsize}:fontcolor=${color}:box=${hasBox ? 1 : 0}:boxcolor=black@${boxAlpha.toFixed(2)}:boxborderw=${boxH}:x=(w-text_w)/2:y=${y}:enable='between(t,${localStart.toFixed(2)},${localEnd.toFixed(2)})'`);
+    const border = settings.stroke ? `:borderw=${Math.max(1, Math.round(fontsize * 0.04))}:bordercolor=black@0.85` : "";
+    const shadow = settings.shadow ? `:shadowx=0:shadowy=2:shadowcolor=black@0.85` : "";
+    filters.push(`drawtext=fontfile=/font.ttf:text='${escapeDrawtextAlpha(text)}':fontsize=${fontsize}:fontcolor=${color}:box=${hasBox ? 1 : 0}:boxcolor=black@${boxAlpha.toFixed(2)}:boxborderw=${boxH}:x=(w-text_w)/2:y=${y}:enable='between(t,${localStart.toFixed(2)},${localEnd.toFixed(2)})'${border}${shadow}`);
   }
   return filters;
 }
@@ -60,58 +62,100 @@ function buildDrawtext(lines: CaptionLine[], segmentOffsets: number[], res: numb
 export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: Blob; name: string }> {
   const instance = await getFFmpeg();
   job.onProgress(0.02);
-  instance.on("progress", ({ progress }) => job.onProgress(Math.min(0.97, 0.02 + (progress ?? 0) / 100)));
-  await instance.writeFile("input.bin", await fetchFile(file));
+  const progressHandler = ({ progress }: { progress: number }) =>
+    job.onProgress(Math.min(0.97, 0.02 + (progress ?? 0) / 100));
+  instance.on("progress", progressHandler);
 
+  const vw = Math.max(2, Math.round(job.sourceWidth));
+  const vh = Math.max(2, Math.round(job.sourceHeight));
   const aspect = job.aspect === "9:16" ? 9 / 16 : job.aspect === "1:1" ? 1 : job.aspect === "4:5" ? 4 / 5 : 16 / 9;
-  const targetW = job.resolution, targetH = Math.round(job.resolution * aspect);
-  const vw = 1920, vh = 1080, srcAspect = vw / vh;
-  let cropW = vw, cropH = vh;
-  if (aspect < srcAspect) cropW = Math.round(vh * aspect); else cropH = Math.round(vw / aspect);
+  const targetW = job.resolution;
+  const targetH = Math.max(2, Math.round(job.resolution * aspect));
+  const srcAspect = vw / vh;
+  let cropW = vw;
+  let cropH = vh;
+  if (aspect < srcAspect) cropW = Math.max(2, Math.round(vh * aspect));
+  else cropH = Math.max(2, Math.round(vw / aspect));
 
-  const parts: string[] = [], offsets: number[] = [0];
-  let acc = 0;
-  job.segments.forEach((seg, i) => {
-    const d = seg.end - seg.start;
-    parts.push(`[0:v]trim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`, `[0:a]atrim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
-    acc += d; offsets.push(acc);
-  });
-  const total = Math.max(0.5, acc);
-  const concatIn = job.segments.map((_, i) => `[v${i}][a${i}]`).join("");
-  const concat = `${concatIn}concat=n=${job.segments.length}:v=1:a=1[vc][ca]`;
-  const chain: string[] = ["[vc]"];
-  const reframeCrop = job.reframe ? buildCropExpression(job.reframe, aspect, vw, vh, total) : null;
-  chain.push(reframeCrop || `crop=${cropW}:${cropH}:((iw-${cropW})/2):((ih-${cropH})/2)`);
-  chain.push(`scale=${targetW}:${targetH}:flags=lanczos`);
-  const captionSettings = job.captionSettings ?? DEFAULT_CAPTION_SETTINGS;
-  if (job.burnCaptions) for (const f of buildDrawtext(job.captions, offsets, job.resolution, aspect, captionSettings)) chain.push(f);
-  if (job.watermark) {
-    const ws = Math.max(20, Math.round(job.resolution * 0.03));
-    chain.push(`drawtext=fontfile=/font.ttf:text='ittyclip':fontsize=${ws}:fontcolor=white@0.35:x=w-text_w-24:y=24`);
-  }
-  const filterComplex = [...parts, concat, `${chain.join(",")},format=yuv420p[vout]`].join(";");
-  const args = job.format === "mp4"
-    ? ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-t", total.toFixed(3), "-y", "out.mp4"]
-    : ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus", "-b:a", "96k", "-t", total.toFixed(3), "-y", "out.webm"];
+  const safeSegments = job.segments
+    .map((seg) => ({
+      start: Math.max(0, Math.min(seg.start, Math.max(0, job.segments.length ? Number.POSITIVE_INFINITY : seg.start))),
+      end: Math.max(seg.end, seg.start),
+    }))
+    .filter((seg) => Number.isFinite(seg.start) && Number.isFinite(seg.end) && seg.end > seg.start);
+  const segments = safeSegments.length > 0 ? safeSegments : [{ start: 0, end: 0.5 }];
 
   try {
-    const fontData = await fetch("/fonts/ArchivoBlack-Regular.ttf").then((r) => r.arrayBuffer());
-    await instance.writeFile("font.ttf", new Uint8Array(fontData));
-  } catch { job.burnCaptions = false; }
+    await instance.writeFile("input.bin", await fetchFile(file));
 
-  const logTail: string[] = [];
-  const onLog = ({ message }: { message: string }) => { logTail.push(message); if (logTail.length > 60) logTail.shift(); };
-  instance.on("log", onLog);
-  try { await instance.exec(args); }
-  catch (err) { throw new Error(`Export failed: ${err instanceof Error ? err.message : String(err)}\n${logTail.slice(-12).join("\n")}`); }
-  finally { instance.off("log", onLog); }
+    const parts: string[] = [];
+    const offsets: number[] = [0];
+    let acc = 0;
+    segments.forEach((seg, i) => {
+      const d = Math.max(0.001, seg.end - seg.start);
+      parts.push(
+        `[0:v]trim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`,
+        `[0:a]atrim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`
+      );
+      acc += d;
+      offsets.push(acc);
+    });
+    const total = Math.max(0.5, acc);
+    const concatIn = segments.map((_, i) => `[v${i}][a${i}]`).join("");
+    const concat = `${concatIn}concat=n=${segments.length}:v=1:a=1[vc][ca]`;
+    const chain: string[] = ["[vc]"];
+    const reframeCrop = job.reframe ? buildCropExpression(job.reframe, aspect, vw, vh, total) : null;
+    chain.push(reframeCrop || `crop=${cropW}:${cropH}:((iw-${cropW})/2):((ih-${cropH})/2)`);
+    chain.push(`scale=${targetW}:${targetH}:flags=lanczos`);
+    const captionSettings = job.captionSettings ?? DEFAULT_CAPTION_SETTINGS;
+    if (job.burnCaptions) {
+      for (const f of buildDrawtext(job.captions, offsets, job.resolution, aspect, captionSettings)) chain.push(f);
+    }
+    if (job.watermark) {
+      const ws = Math.max(20, Math.round(job.resolution * 0.03));
+      chain.push(`drawtext=fontfile=/font.ttf:text='ittyclip':fontsize=${ws}:fontcolor=white@0.35:x=w-text_w-24:y=24`);
+    }
 
-  const data = await instance.readFile(job.format === "mp4" ? "out.mp4" : "out.webm");
-  if (typeof data === "string") throw new Error("FFmpeg returned text instead of a binary output file.");
-  const outputBuffer = new ArrayBuffer(data.byteLength);
-  new Uint8Array(outputBuffer).set(data);
-  const blob = new Blob([outputBuffer], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
-  job.onProgress(1);
-  const safeName = (job.clipName || "ittyclip-export").trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "ittyclip-export";
-  return { blob, name: `${safeName}.${job.format}` };
+    const filterComplex = [...parts, concat, `${chain.join(",")},format=yuv420p[vout]`].join(";");
+    const args = job.format === "mp4"
+      ? ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-t", total.toFixed(3), "-y", "out.mp4"]
+      : ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus", "-b:a", "96k", "-t", total.toFixed(3), "-y", "out.webm"];
+
+    try {
+      const fontData = await fetch("/fonts/ArchivoBlack-Regular.ttf").then((r) => r.arrayBuffer());
+      await instance.writeFile("font.ttf", new Uint8Array(fontData));
+    } catch {
+      // Captions are optional. Keep the export functional if the font asset is unavailable.
+    }
+
+    const logTail: string[] = [];
+    const onLog = ({ message }: { message: string }) => {
+      logTail.push(message);
+      if (logTail.length > 60) logTail.shift();
+    };
+    instance.on("log", onLog);
+    try {
+      await instance.exec(args);
+    } catch (err) {
+      throw new Error(`Export failed: ${err instanceof Error ? err.message : String(err)}\n${logTail.slice(-12).join("\n")}`);
+    } finally {
+      instance.off("log", onLog);
+    }
+
+    const outputName = job.format === "mp4" ? "out.mp4" : "out.webm";
+    const data = await instance.readFile(outputName);
+    if (typeof data === "string") throw new Error("FFmpeg returned text instead of a binary output file.");
+    const outputBuffer = new ArrayBuffer(data.byteLength);
+    new Uint8Array(outputBuffer).set(data);
+    const blob = new Blob([outputBuffer], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
+    job.onProgress(1);
+    const safeName = (job.clipName || "ittyclip-export").trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "ittyclip-export";
+    return { blob, name: `${safeName}.${job.format}` };
+  } finally {
+    instance.off("progress", progressHandler);
+    try { await instance.deleteFile("input.bin"); } catch {}
+    try { await instance.deleteFile("out.mp4"); } catch {}
+    try { await instance.deleteFile("out.webm"); } catch {}
+    try { await instance.deleteFile("font.ttf"); } catch {}
+  }
 }
