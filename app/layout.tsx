@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Intelligence Designed To Evolve",
+  title: "ittyclip — every long video, clipped into gold",
   description:
-    "Build applications that reason, adapt and collaborate using a modular AI platform designed for production.",
+    "Browser-first AI clipping studio. Drop a video, ittyclip finds your best moments, times captions with on-device whisper, and exports vertical shorts — entirely in your browser.",
 };
 
 export default function RootLayout({

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type StatProps = {
@@ -75,17 +76,16 @@ function Stat({ icon, value, suffix, decimals, label, duration, delay, entranceD
 }
 
 const STATS = [
-  { icon: "<", value: 120, suffix: "ms", decimals: 0, label: "Inference Time" },
-  { icon: "%", value: 99.99, suffix: "%", decimals: 2, label: "Platform Uptime" },
-  { icon: "*", value: 24, suffix: "/7", decimals: 0, label: "Autonomous Runtime" },
-  { icon: "#", value: 2.4, suffix: "M", decimals: 1, label: "Context Windows" },
+  { icon: "★", value: 6, suffix: "", decimals: 0, label: "AI Highlight Moments" },
+  { icon: "↓", value: 0, suffix: "s", decimals: 0, label: "Upload Time — Zero Uploads" },
+  { icon: "#", value: 4, suffix: "", decimals: 0, label: "Aspect Ratios · Reels Ready" },
+  { icon: "%", value: 100, suffix: "%", decimals: 0, label: "In-Browser Processing" },
 ];
 
 const NAV_LINKS = [
-  { label: "Home", active: true },
-  { label: "Product", active: false },
-  { label: "Case Studies", active: false },
-  { label: "Contact", active: false },
+  { label: "Home", href: "/", active: true },
+  { label: "Studio", href: "/studio", active: false },
+  { label: "Contact", href: "#", active: false },
 ];
 
 const VIDEO_SRC =
@@ -129,21 +129,21 @@ export default function SwissLanding() {
 
       <div className="page">
         <header className="header">
-          <a className="logo" href="#" aria-label="Home">
+          <Link className="logo" href="/" aria-label="ittyclip home">
             <img src="/assets/logo.jpg" alt="" width={52} height={52} />
-          </a>
+          </Link>
 
           <nav className="nav" aria-label="Primary">
             {NAV_LINKS.map((link) => (
-              <a key={link.label} href="#" className={link.active ? "active" : ""}>
+              <Link key={link.label} href={link.href} className={link.active ? "active" : ""}>
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
 
-          <a className="sign-in" href="#">
-            Sign in
-          </a>
+          <Link className="sign-in" href="/studio">
+            Open Studio
+          </Link>
 
           <button
             type="button"
@@ -163,39 +163,40 @@ export default function SwissLanding() {
           <div className="trust anim" style={{ "--d": "0.05s" } as React.CSSProperties}>
             <span className="avatar avatar-1">
               <span className="avatar-inner">
-                <i className="fa-brands fa-microsoft" aria-hidden />
+                <i className="fa-brands fa-tiktok" aria-hidden />
               </span>
             </span>
             <span className="avatar avatar-2">
               <span className="avatar-inner">
-                <i className="fa-brands fa-amazon" aria-hidden />
+                <i className="fa-brands fa-youtube" aria-hidden />
               </span>
             </span>
             <span className="avatar avatar-3">
               <span className="avatar-inner">
-                <i className="fa-brands fa-google" aria-hidden />
+                <i className="fa-brands fa-instagram" aria-hidden />
               </span>
             </span>
-            <span className="trust-pill">Trusted by 2000+ Enterprises</span>
+            <span className="trust-pill">Built for TikTok · Reels · Shorts</span>
           </div>
 
           <h1 className="headline">
             <span className="hl-line" style={{ "--d": "0.12s" } as React.CSSProperties}>
-              Intelligence
+              Every long video,
             </span>
             <span className="hl-line" style={{ "--d": "0.3s" } as React.CSSProperties}>
-              Designed To Evolve
+              clipped into gold.
             </span>
           </h1>
 
           <p className="subhead anim" style={{ "--d": "0.28s" } as React.CSSProperties}>
-            Build applications that reason, adapt and collaborate using a modular AI platform
-            designed for production.
+            ittyclip hunts your best moments, auto-times captions with on-device
+            whisper, and exports vertical shorts — entirely in your browser.
+            Nothing uploads, nothing waits.
           </p>
 
-          <a className="cta anim" style={{ "--d": "0.4s" } as React.CSSProperties} href="#">
-            Get Started
-          </a>
+          <Link className="cta anim" style={{ "--d": "0.4s" } as React.CSSProperties} href="/studio">
+            Launch the studio
+          </Link>
         </section>
 
         <footer className="stats">
@@ -225,19 +226,19 @@ export default function SwissLanding() {
       >
         <nav className="menu-sheet" aria-label="Mobile">
           {NAV_LINKS.map((link, i) => (
-            <a
+            <Link
               key={link.label}
-              href="#"
+              href={link.href}
               className={`menu-link${link.active ? " active" : ""}`}
               style={{ "--d": `${0.03 + i * 0.05}s` } as React.CSSProperties}
               onClick={() => setOpen(false)}
             >
               {link.label}
-            </a>
+            </Link>
           ))}
-          <a className="menu-signin" href="#" onClick={() => setOpen(false)}>
-            Sign in
-          </a>
+          <Link className="menu-signin" href="/studio" onClick={() => setOpen(false)}>
+            Open Studio
+          </Link>
         </nav>
       </div>
     </div>
