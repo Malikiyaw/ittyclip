@@ -1,5 +1,4 @@
 import type { AnalysisResult, ClipLength, Moment } from "@/lib/types";
-import { runHighlightAnalysis } from "@/lib/analysis/engine";
 import type { RankedHighlight } from "@/lib/analysis/types";
 import {
   ANALYSIS_STAGES,
@@ -116,6 +115,14 @@ function getAnalyzeWorker(): Worker {
       entry.resolve({ analysis: { ...rest, envelope }, highlights });
     } else if (msg.type === "error") {
       pending.delete(msg.id);
+      // The worker may be in a broken state (busy or failed decode) — retire it
+      // so the next attempt spins up a fresh one.
+      try {
+        worker?.terminate();
+      } catch {
+        /* already gone */
+      }
+      worker = null;
       entry.reject(new Error(msg.message || "Analysis worker error"));
     }
   };
@@ -173,8 +180,9 @@ function analyzeWithWorker(
 
 /**
  * Full ingest pipeline: decode + signals + local highlight ranking.
- * Runs on a Web Worker so the main thread never blocks; falls back to the
- * main-thread implementation when the worker is unavailable.
+ * Runs on a Web Worker so the main thread NEVER blocks — if the worker is
+ * unavailable, this returns `null` instead of degrading to a blocking
+ * main-thread decode (which would freeze the studio on large videos).
  */
 export async function analyzeWithHighlights(
   file: File,
@@ -182,26 +190,18 @@ export async function analyzeWithHighlights(
   maxResults: number,
   onProgress?: (p: number, stage?: string) => void,
   signal?: AbortSignal
-): Promise<AnalyzePayload> {
-  if (typeof Worker !== "undefined") {
+): Promise<AnalyzePayload | null> {
+  if (typeof Worker === "undefined") return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") throw err;
-      console.warn("[ittyclip] analysis worker unavailable — falling back to main thread:", err);
+      console.warn(`[ittyclip] analysis worker failed (attempt ${attempt + 1} of 2):`, err);
     }
   }
-  const analysis = await analyzeFileMain(file, onProgress, signal);
-  const highlights = runHighlightAnalysis({
-    envelope: analysis.envelope,
-    hopSec: analysis.hopSec,
-    duration: analysis.duration,
-    silence: analysis.silence,
-    transcript: null,
-    clipLength,
-    maxResults,
-  });
-  return { analysis, highlights };
+  console.error("[ittyclip] analysis worker unavailable — proceeding without local analysis.");
+  return null;
 }
 
 /**
@@ -214,6 +214,7 @@ export async function analyzeFile(
   onProgress?: (p: number, stage?: string) => void,
   signal?: AbortSignal
 ): Promise<AnalysisResult> {
-  const { analysis } = await analyzeWithHighlights(file, 30, 10, onProgress, signal);
-  return analysis;
+  const payload = await analyzeWithHighlights(file, 30, 10, onProgress, signal);
+  if (!payload) throw new Error("Analysis worker unavailable.");
+  return payload.analysis;
 }

@@ -252,8 +252,10 @@ export const useStudio = create<StudioState>()((set, get) => ({
         (p, stage) => set({ analyzeProgress: p, analyzeStage: stage ?? "" }),
         abort.signal
       );
-      analysis = payload.analysis;
-      highlights = payload.highlights;
+      if (payload) {
+        analysis = payload.analysis;
+        highlights = payload.highlights;
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         URL.revokeObjectURL(url);
@@ -263,6 +265,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
       console.error("[ittyclip] analysis failed:", err);
       analysis = null;
     }
+
+    const noLocalAnalysis = analysis === null;
 
     const media: MediaInfo = {
       name: file.name,
@@ -298,6 +302,12 @@ export const useStudio = create<StudioState>()((set, get) => ({
       redoStack: [],
       projectName: file.name,
       dirty: false,
+      ...(noLocalAnalysis
+        ? {
+            toast:
+              "Analysis engine unavailable in this browser — the studio is ready, but auto-highlights are off.",
+          }
+        : {}),
     });
 
     const pj = get().pendingProject;

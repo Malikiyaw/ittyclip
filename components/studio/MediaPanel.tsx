@@ -486,7 +486,11 @@ function AITab({ onExport }: { onExport: () => void }) {
       <ContentIntelligencePanel />
 
       {pending.length === 0 && (
-        <p className="mt-6 text-center text-xs text-white/40">No highlights yet — drop a video to scan.</p>
+        <p className="mt-6 text-center text-xs leading-relaxed text-white/40">
+          {media
+            ? "No highlights generated — the local analysis engine couldn't run in this browser. Clip manually with the A key, or try the AI engine below."
+            : "No highlights yet — drop a video to scan."}
+        </p>
       )}
 
       {rest.map((m) => (

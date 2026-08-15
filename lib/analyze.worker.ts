@@ -60,13 +60,25 @@ function decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
       return;
     }
     const audio = new Ctx(1, 1, 48000);
-    audio.decodeAudioData(
-      arrayBuffer,
-      (decoded) => {
-        resolve(decoded);
-      },
-      (err) => reject(new Error("Could not decode audio track: " + (err?.message ?? "unknown error")))
-    );
+    const finish = (decoded: AudioBuffer) => {
+      clearTimeout(timer);
+      resolve(decoded);
+    };
+    const fail = (err?: unknown) => {
+      clearTimeout(timer);
+      reject(
+        new Error("Could not decode audio track: " + ((err as { message?: string })?.message ?? "unknown error"))
+      );
+    };
+    const timer = setTimeout(() => fail(new Error("decode timed out")), 120_000);
+    try {
+      const maybe = audio.decodeAudioData(arrayBuffer, finish, fail);
+      if (maybe && typeof (maybe as Promise<AudioBuffer>).then === "function") {
+        (maybe as Promise<AudioBuffer>).then(finish, fail);
+      }
+    } catch (err) {
+      fail(err);
+    }
   });
 }
 
