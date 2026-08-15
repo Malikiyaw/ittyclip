@@ -4,15 +4,14 @@ import type { CaptionLine, CaptionSettings, ExportJob } from "@/lib/types";
 import { escapeDrawtext } from "@/lib/captions";
 import { buildCropExpression } from "@/lib/reframe/trajectory";
 
-// Use the portable single-threaded core. The multi-threaded core requires
-// SharedArrayBuffer/cross-origin isolation and breaks Safari/iOS. This core
-// works without browser flags in Safari, Firefox, Chrome, and Edge.
+// Portable single-threaded FFmpeg core. It does not require SharedArrayBuffer
+// or cross-origin isolation, so Safari/iOS can export without special flags.
 const BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
 
 export function supportsBrowserEncoding(): boolean {
-  return typeof Worker !== "undefined" && typeof WebAssembly !== "undefined";
+  return typeof WebAssembly !== "undefined";
 }
 
 export async function getFFmpeg(): Promise<FFmpeg> {
@@ -24,7 +23,6 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     await instance.load({
       coreURL: await toBlobURL(`${BASE}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(`${BASE}/ffmpeg-core.wasm`, "application/wasm"),
-      workerURL: await toBlobURL(`${BASE}/worker.js`, "text/javascript"),
     });
     ffmpeg = instance;
     return instance;
