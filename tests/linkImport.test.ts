@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyLink, basenameFromUrl } from "@/lib/linkDetect";
+import { friendlyResolutionError } from "@/lib/server/ytdlp";
 
 describe("classifyLink", () => {
   it("classifies direct video links", () => {
@@ -37,5 +38,40 @@ describe("basenameFromUrl", () => {
   it("falls back when no file name is present", () => {
     expect(basenameFromUrl("https://cdn.example.com/videos/")).toBe("video-imported.mp4");
     expect(basenameFromUrl("garbage")).toBe("video-imported.mp4");
+  });
+});
+
+describe("friendlyResolutionError", () => {
+  it("classifies the YouTube bot-check instead of generic login", () => {
+    const msg = friendlyResolutionError(
+      "ERROR: [youtube] AbCdEf: Sign in to confirm you're not a bot."
+    );
+    expect(msg).toContain("not a bot");
+    expect(msg).not.toContain("requires a login to download");
+  });
+
+  it("classifies the TikTok unexpected-response block", () => {
+    const msg = friendlyResolutionError(
+      "ERROR: [TikTok] 123456: Unexpected response from webpage request"
+    );
+    expect(msg).toContain("TikTok");
+  });
+
+  it("classifies specific failure causes before generic login", () => {
+    expect(friendlyResolutionError("This video is private")).toContain("private");
+    expect(friendlyResolutionError("ERROR: Sign in to view this video")).toContain(
+      "age-restricted or members-only"
+    );
+    expect(friendlyResolutionError("Video unavailable")).toContain("unavailable");
+    expect(friendlyResolutionError("ERROR: [youtube] abc: This video is a live stream")).toContain(
+      "Live streams"
+    );
+  });
+
+  it("falls through to the login hint only for genuine login errors", () => {
+    expect(friendlyResolutionError("ERROR: You must log in to access this content")).toContain(
+      "YTDLP_COOKIES"
+    );
+    expect(friendlyResolutionError("ERROR: Please log in and try again")).toContain("YTDLP_COOKIES");
   });
 });

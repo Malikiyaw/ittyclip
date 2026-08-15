@@ -118,7 +118,7 @@ export interface ResolvedMedia {
 
 export async function resolvePlatformUrl(inputUrl: string): Promise<ResolvedMedia> {
   const binPath = await downloadBinary();
-  const args = [
+  const baseArgs = [
     "--dump-single-json",
     "--no-playlist",
     "--no-warnings",
@@ -132,25 +132,34 @@ export async function resolvePlatformUrl(inputUrl: string): Promise<ResolvedMedi
     "b[ext=mp4]/b",
   ];
   const cookies = process.env.YTDLP_COOKIES?.trim();
-  if (cookies) args.push("--cookies", cookies);
-  args.push(inputUrl);
+  if (cookies) baseArgs.push("--cookies", cookies);
 
-  let stdout: string;
-  let stderr = "";
-  try {
-    const res = await runExec(binPath, args, {
-      timeout: RESOLVE_TIMEOUT_MS,
-      maxBuffer: 32 * 1024 * 1024,
-    });
-    stdout = res.stdout;
-    stderr = res.stderr || "";
-  } catch (err) {
-    const e = err as { stderr?: string; message?: string; killed?: boolean };
-    stderr = e.stderr ?? "";
-    if (e.killed) throw new Error("That platform link took too long to resolve.");
-    throw new Error(friendlyResolutionError(stderr || e.message || ""));
+  const isYoutube = /youtube\.com|youtu\.be/i.test(inputUrl);
+  const attempts = [
+    [...baseArgs, inputUrl],
+    ...(isYoutube ? [[...baseArgs, "--extractor-args", "youtube:player_client=android", inputUrl]] : []),
+  ];
+
+  let lastError = "";
+  for (const args of attempts) {
+    try {
+      const res = await runExec(binPath, args, {
+        timeout: RESOLVE_TIMEOUT_MS,
+        maxBuffer: 32 * 1024 * 1024,
+      });
+      return parseResolved(res.stdout);
+    } catch (err) {
+      const e = err as { stderr?: string; message?: string; killed?: boolean };
+      lastError = e.stderr ?? e.message ?? "";
+      if (e.killed) throw new Error("That platform link took too long to resolve.");
+      if (isYoutube && /not a bot|sign in to confirm/i.test(lastError)) continue;
+      break;
+    }
   }
+  throw new Error(friendlyResolutionError(lastError));
+}
 
+function parseResolved(stdout: string): ResolvedMedia {
   try {
     const info = JSON.parse(stdout) as {
       url?: string;
@@ -174,28 +183,43 @@ export async function resolvePlatformUrl(inputUrl: string): Promise<ResolvedMedi
   }
 }
 
-function friendlyResolutionError(raw: string): string {
+export function friendlyResolutionError(raw: string): string {
   const s = raw.toLowerCase();
-  if (s.includes("unexpected response") && s.includes("tiktok")) {
-    return "TikTok is blocking automated downloads right now. Try again later, or add your browser cookies via the YTDLP_COOKIES setting.";
-  }
-  if (s.includes("login") || s.includes("must sign in") || s.includes("sign in to")) {
-    return "This platform requires a login to download. Add your browser cookies via the YTDLP_COOKIES setting.";
-  }
   if (s.includes("not a bot") || s.includes("sign in to confirm")) {
-    return "YouTube is asking to confirm you're not a bot — this video can't be downloaded without login.";
+    return "YouTube is asking to confirm you're not a bot — this video can't be downloaded without login. Try again later, or add browser cookies via the YTDLP_COOKIES setting.";
+  }
+  if (s.includes("tiktok") && s.includes("unexpected response")) {
+    return "TikTok is blocking automated downloads right now. Try again later, or add your browser cookies via the YTDLP_COOKIES setting.";
   }
   if (s.includes("private video") || s.includes("this video is private")) {
     return "That video is private and can't be imported.";
   }
-  if (s.includes("age-restricted") || s.includes("sign in to view this video")) {
-    return "That video is age-restricted and needs a signed-in account.";
+  if (
+    s.includes("age-restricted") ||
+    s.includes("age restricted") ||
+    s.includes("sign in to view this video")
+  ) {
+    return "That video is age-restricted or members-only and needs a signed-in account.";
   }
-  if (s.includes("video unavailable") || s.includes("is unavailable") || s.includes("not available")) {
+  if (s.includes("members-only") || s.includes("members only")) {
+    return "That video is members-only and needs a signed-in account.";
+  }
+  if (s.includes("requires payment") || (s.includes("rental") && s.includes("payment"))) {
+    return "That video is a paid rental and can't be downloaded.";
+  }
+  if (
+    s.includes("video unavailable") ||
+    s.includes("is unavailable") ||
+    s.includes("not available") ||
+    s.includes("has been removed")
+  ) {
     return "That video is unavailable — it may be deleted, region-locked, or restricted.";
   }
-  if (s.includes("live stream")) {
+  if (s.includes("live stream") || s.includes("is live")) {
     return "Live streams can't be imported until they've ended.";
+  }
+  if (s.includes("login") || s.includes("log in") || s.includes("must be logged") || s.includes("requires authentication")) {
+    return "This platform requires a login to download. Add your browser cookies via the YTDLP_COOKIES setting.";
   }
   return "Couldn't download that platform video — it may be private, region-locked, or restricted.";
 }
