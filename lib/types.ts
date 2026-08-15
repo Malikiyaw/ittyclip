@@ -111,9 +111,6 @@ export interface ExportJob {
   watermark: boolean;
   captionSettings?: CaptionSettings;
   reframe?: import("@/lib/reframe/state").ReframeState;
-  /** Actual source dimensions. Export must not assume 1920×1080. */
-  sourceWidth: number;
-  sourceHeight: number;
   clipName?: string;
   onProgress: (p: number) => void;
 }
