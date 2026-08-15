@@ -59,6 +59,30 @@ function buildDrawtext(lines: CaptionLine[], segmentOffsets: number[], res: numb
   return filters;
 }
 
+async function probeSourceDimensions(file: Blob): Promise<{ width: number; height: number }> {
+  if (typeof document === "undefined") return { width: 1920, height: 1080 };
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise((resolve) => {
+      const video = document.createElement("video");
+      let settled = false;
+      const finish = (width: number, height: number) => {
+        if (settled) return;
+        settled = true;
+        resolve({ width: width || 1920, height: height || 1080 });
+      };
+      video.preload = "metadata";
+      video.onloadedmetadata = () => finish(video.videoWidth, video.videoHeight);
+      video.onerror = () => finish(1920, 1080);
+      video.src = url;
+      video.load();
+      setTimeout(() => finish(video.videoWidth, video.videoHeight), 5000);
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: Blob; name: string }> {
   const instance = await getFFmpeg();
   job.onProgress(0.02);
@@ -66,8 +90,9 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
     job.onProgress(Math.min(0.97, 0.02 + (progress ?? 0) / 100));
   instance.on("progress", progressHandler);
 
-  const vw = Math.max(2, Math.round(job.sourceWidth));
-  const vh = Math.max(2, Math.round(job.sourceHeight));
+  const source = await probeSourceDimensions(file);
+  const vw = Math.max(2, Math.round(source.width));
+  const vh = Math.max(2, Math.round(source.height));
   const aspect = job.aspect === "9:16" ? 9 / 16 : job.aspect === "1:1" ? 1 : job.aspect === "4:5" ? 4 / 5 : 16 / 9;
   const targetW = job.resolution;
   const targetH = Math.max(2, Math.round(job.resolution * aspect));
@@ -77,13 +102,10 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   if (aspect < srcAspect) cropW = Math.max(2, Math.round(vh * aspect));
   else cropH = Math.max(2, Math.round(vw / aspect));
 
-  const safeSegments = job.segments
-    .map((seg) => ({
-      start: Math.max(0, Math.min(seg.start, Math.max(0, job.segments.length ? Number.POSITIVE_INFINITY : seg.start))),
-      end: Math.max(seg.end, seg.start),
-    }))
+  const segments = job.segments
+    .map((seg) => ({ start: Math.max(0, seg.start), end: Math.max(seg.start, seg.end) }))
     .filter((seg) => Number.isFinite(seg.start) && Number.isFinite(seg.end) && seg.end > seg.start);
-  const segments = safeSegments.length > 0 ? safeSegments : [{ start: 0, end: 0.5 }];
+  const safeSegments = segments.length > 0 ? segments : [{ start: 0, end: 0.5 }];
 
   try {
     await instance.writeFile("input.bin", await fetchFile(file));
@@ -91,7 +113,7 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
     const parts: string[] = [];
     const offsets: number[] = [0];
     let acc = 0;
-    segments.forEach((seg, i) => {
+    safeSegments.forEach((seg, i) => {
       const d = Math.max(0.001, seg.end - seg.start);
       parts.push(
         `[0:v]trim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`,
@@ -101,14 +123,27 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
       offsets.push(acc);
     });
     const total = Math.max(0.5, acc);
-    const concatIn = segments.map((_, i) => `[v${i}][a${i}]`).join("");
-    const concat = `${concatIn}concat=n=${segments.length}:v=1:a=1[vc][ca]`;
+    const concatIn = safeSegments.map((_, i) => `[v${i}][a${i}]`).join("");
+    const concat = `${concatIn}concat=n=${safeSegments.length}:v=1:a=1[vc][ca]`;
     const chain: string[] = ["[vc]"];
     const reframeCrop = job.reframe ? buildCropExpression(job.reframe, aspect, vw, vh, total) : null;
     chain.push(reframeCrop || `crop=${cropW}:${cropH}:((iw-${cropW})/2):((ih-${cropH})/2)`);
     chain.push(`scale=${targetW}:${targetH}:flags=lanczos`);
+
     const captionSettings = job.captionSettings ?? DEFAULT_CAPTION_SETTINGS;
-    if (job.burnCaptions) {
+    let burnCaptions = job.burnCaptions;
+    if (burnCaptions) {
+      try {
+        const fontData = await fetch("/fonts/ArchivoBlack-Regular.ttf").then((r) => {
+          if (!r.ok) throw new Error("Font asset unavailable");
+          return r.arrayBuffer();
+        });
+        await instance.writeFile("font.ttf", new Uint8Array(fontData));
+      } catch {
+        burnCaptions = false;
+      }
+    }
+    if (burnCaptions) {
       for (const f of buildDrawtext(job.captions, offsets, job.resolution, aspect, captionSettings)) chain.push(f);
     }
     if (job.watermark) {
@@ -120,13 +155,6 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
     const args = job.format === "mp4"
       ? ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-t", total.toFixed(3), "-y", "out.mp4"]
       : ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus", "-b:a", "96k", "-t", total.toFixed(3), "-y", "out.webm"];
-
-    try {
-      const fontData = await fetch("/fonts/ArchivoBlack-Regular.ttf").then((r) => r.arrayBuffer());
-      await instance.writeFile("font.ttf", new Uint8Array(fontData));
-    } catch {
-      // Captions are optional. Keep the export functional if the font asset is unavailable.
-    }
 
     const logTail: string[] = [];
     const onLog = ({ message }: { message: string }) => {
