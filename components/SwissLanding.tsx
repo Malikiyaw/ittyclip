@@ -149,7 +149,6 @@ const NAV_LINKS = [
   { label: "Home", href: "/" },
   { label: "Studio", href: "/studio" },
   { label: "Pricing", href: "#pricing" },
-  { label: "Contact", href: "#" },
 ];
 
 const VIDEO_SRC =
@@ -160,6 +159,8 @@ export default function SwissLanding() {
   const [open, setOpen] = useState(false);
   const session = useAuth((s) => s.session);
   const signedIn = session !== null;
+  const sheetRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     hydrateAuth();
@@ -172,8 +173,17 @@ export default function SwissLanding() {
   };
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    video.play().catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (open) {
       document.body.classList.add("menu-open");
+      const first = sheetRef.current?.querySelector<HTMLElement>("a, button");
+      first?.focus();
     } else {
       document.body.classList.remove("menu-open");
     }
@@ -197,14 +207,26 @@ export default function SwissLanding() {
   }, [open]);
 
   return (
-    <div className="swiss">
+    <>
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      <div className="swiss">
       <div className="bg" aria-hidden>
-        <video className="bg-video" autoPlay muted loop playsInline>
+        <video
+          ref={videoRef}
+          className="bg-video"
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          disablePictureInPicture
+        >
           <source src={VIDEO_SRC} type="video/mp4" />
         </video>
       </div>
 
-      <div className="page">
+      <div className="page" id="main">
         <header className="header">
           <Link className="logo" href="/" aria-label="ittyclip home">
             <img src="/assets/logo.jpg" alt="" width={52} height={52} />
@@ -350,12 +372,15 @@ export default function SwissLanding() {
       <div
         id="mobile-menu"
         className="menu-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
         hidden={!open}
         onClick={(e) => {
           if (e.target === e.currentTarget) setOpen(false);
         }}
       >
-        <nav className="menu-sheet" aria-label="Mobile">
+        <nav ref={sheetRef} className="menu-sheet" aria-label="Mobile">
           {NAV_LINKS.map((link, i) => (
             <a
               key={link.label}
@@ -381,6 +406,7 @@ export default function SwissLanding() {
           )}
         </nav>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

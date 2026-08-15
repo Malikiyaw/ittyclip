@@ -251,6 +251,37 @@ input[type="range"]::-webkit-slider-thumb {
   z-index: 0;
 }
 
+.swiss .skip-link {
+  position: fixed;
+  top: -100px;
+  left: 12px;
+  z-index: 60;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #fff;
+  color: #04050a;
+  font: 600 12px/1 var(--font-body);
+  text-decoration: none;
+  transition: top 0.2s ease;
+}
+
+.swiss .skip-link:focus {
+  top: 12px;
+}
+
+.swiss a:focus-visible,
+.swiss button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swiss .skip-link {
+    transition: none;
+  }
+}
+
 /* --- Page frame: first viewport, 3 vertical regions; page scrolls past it --- */
 
 .swiss .page {
