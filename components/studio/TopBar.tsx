@@ -77,7 +77,7 @@ export function TopBar({ onExport }: { onExport: () => void }) {
   }, []);
 
   return (
-    <header className="flex min-h-14 shrink-0 items-center gap-2 overflow-hidden border-b border-white/10 bg-black px-3 sm:h-16 sm:gap-4 sm:px-5">
+    <header className="studio-topbar flex min-h-14 shrink-0 items-center gap-2 overflow-hidden border-b border-white/10 bg-black px-3 sm:h-16 sm:gap-4 sm:px-5">
       <Link href="/" className="flex shrink-0 items-center gap-2 sm:gap-3" aria-label="ittyclip home">
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-[0_4px_16px_rgba(255,255,255,0.25)] sm:h-8 sm:w-8">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -90,7 +90,7 @@ export function TopBar({ onExport }: { onExport: () => void }) {
       <span className="hidden h-6 w-px bg-white/10 sm:block" aria-hidden />
 
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 max-w-full items-center gap-1.5">
           {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white" title="Unsaved changes" aria-label="Unsaved changes" />}
           {media ? (
             <input
@@ -100,7 +100,7 @@ export function TopBar({ onExport }: { onExport: () => void }) {
                 if (!projectName.trim()) setProjectName(media.name);
               }}
               aria-label="Project name"
-              className="w-[min(30vw,160px)] min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-mono text-[11px] text-white/90 outline-none transition-colors focus:border-white/30 focus:bg-white/[0.06] hover:border-white/20 sm:text-xs"
+              className="studio-project-name w-[min(30vw,160px)] min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-mono text-[11px] text-white/90 outline-none transition-colors focus:border-white/30 focus:bg-white/[0.06] hover:border-white/20 sm:text-xs"
             />
           ) : (
             <p className="truncate font-mono text-xs text-white/60">no project</p>
