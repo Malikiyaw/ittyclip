@@ -63,6 +63,7 @@ export function Preview() {
   if (!media) return null;
   const duration = media.duration || 0;
   const ratio = ASPECTS[aspect].ratio;
+  const isVertical = aspect === "9:16";
 
   // Simulated reframe transform — same math as the export crop.
   const reframeTransform = useMemo(() => {
@@ -89,6 +90,25 @@ export function Preview() {
           </span>
         )}
         <div className="relative h-full max-h-full" style={{ aspectRatio: ratio }}>
+          {isVertical && (
+            <div
+              className="pointer-events-none absolute -inset-3 z-10 rounded-[36px] border border-white/15 bg-black/50"
+              aria-hidden
+            />
+          )}
+          {isVertical && (
+            <div
+              className="pointer-events-none absolute -top-1.5 left-1/2 z-10 h-3.5 w-16 -translate-x-1/2 rounded-full bg-black ring-1 ring-white/25"
+              aria-hidden
+            />
+          )}
+          {isVertical && (
+            <div className="pointer-events-none absolute top-1/2 -right-3 z-10 flex -translate-y-1/2 flex-col gap-3" aria-hidden>
+              <span className="h-7 w-1 rounded-full bg-white/25" />
+              <span className="h-12 w-1 rounded-full bg-white/25" />
+              <span className="h-7 w-1 rounded-full bg-white/25" />
+            </div>
+          )}
           <video
             ref={videoRef}
             src={media.url}
@@ -116,6 +136,12 @@ export function Preview() {
               <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-white" />
               <span className="font-mono text-[10px] tracking-[0.25em] text-white/90 uppercase">CLIPPING</span>
             </div>
+          )}
+
+          {isVertical && (
+            <span className="pointer-events-none absolute -bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-3 py-1 font-mono text-[9px] tracking-[0.25em] text-white/50 uppercase backdrop-blur">
+              shorts preview
+            </span>
           )}
         </div>
       </div>

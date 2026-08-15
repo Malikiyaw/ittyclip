@@ -19,6 +19,11 @@ export function TopBar({ onExport }: { onExport: () => void }) {
   const canRedo = useStudio((s) => s.redoStack.length > 0);
   const session = useAuth((s) => s.session);
   const logout = useAuth((s) => s.logout);
+  const projectName = useStudio((s) => s.projectName);
+  const dirty = useStudio((s) => s.dirty);
+  const setProjectName = useStudio((s) => s.setProjectName);
+  const newProject = useStudio((s) => s.newProject);
+  const markSaved = useStudio((s) => s.markSaved);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const signOut = () => {
@@ -33,9 +38,10 @@ export function TopBar({ onExport }: { onExport: () => void }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ittyclip-project${PROJECT_EXT}`;
+    a.download = `ittyclip-${projectName || "project"}${PROJECT_EXT}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+    markSaved();
     showToast("Project saved");
   };
 
@@ -68,13 +74,32 @@ export function TopBar({ onExport }: { onExport: () => void }) {
 
       <span className="h-6 w-px bg-white/10" aria-hidden />
 
-      <div className="min-w-0">
-        <p className="truncate font-mono text-xs text-white/60">
-          {media ? media.name : "no project"}
-        </p>
+<div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {dirty && (
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-white"
+              title="Unsaved changes"
+              aria-label="Unsaved changes"
+            />
+          )}
+          {media ? (
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              onBlur={() => {
+                if (!projectName.trim()) setProjectName(media.name);
+              }}
+              aria-label="Project name"
+              className="w-40 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-mono text-xs text-white/90 outline-none transition-colors focus:border-white/30 focus:bg-white/[0.06] hover:border-white/20"
+            />
+          ) : (
+            <p className="truncate font-mono text-xs text-white/60">no project</p>
+          )}
+        </div>
         {media && (
-          <p className="text-[10px] text-white/35">
-            {fmtClock(media.duration)} · {clips.length} clip{clips.length === 1 ? "" : "s"} in timeline
+          <p className="text-[10px] whitespace-nowrap text-white/35">
+            {fmtClock(media.duration)} · {clips.length} clip{clips.length === 1 ? "" : "s"}
             {analyzing && " · analyzing…"}
           </p>
         )}
@@ -106,8 +131,11 @@ export function TopBar({ onExport }: { onExport: () => void }) {
         </button>
         {media && (
           <>
+            <button onClick={newProject} className="s-btn" title="Start a fresh timeline">
+              New
+            </button>
             <button onClick={saveProject} className="s-btn">
-              Save project
+              {dirty ? "Save project" : "Saved"}
             </button>
             <button
               onClick={() => fileRef.current?.click()}

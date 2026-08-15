@@ -8,9 +8,10 @@ import { CAPTION_STYLES } from "@/lib/types";
 import type { RankedHighlight } from "@/lib/analysis/types";
 import { WHISPER_MODELS, type WhisperModelKey } from "@/lib/whisper";
 import { extractThumb } from "@/lib/thumbnails";
+import { contentIntelligence } from "@/lib/content";
 import { REFRAME_SCALE_MAX, REFRAME_SCALE_MIN } from "@/lib/reframe/state";
 
-type Tab = "highlights" | "captions" | "styles" | "reframe";
+type Tab = "ai" | "edit" | "captions" | "reframe" | "export";
 
 const BREAKDOWN_LABELS: { key: keyof RankedHighlight["breakdown"]; label: string }[] = [
   { key: "speech", label: "speech" },
@@ -146,7 +147,238 @@ function HighlightCard({ m, rank }: { m: RankedHighlight; rank: number }) {
   );
 }
 
-function HighlightsTab() {
+function whyThisClip(m: RankedHighlight): string {
+  const signals: string[] = [];
+  if (m.breakdown.speech >= 55) signals.push("clear speech");
+  if (m.breakdown.energy >= 55) signals.push("high energy");
+  if (m.breakdown.pacing >= 55) signals.push("fast pacing");
+  if (m.breakdown.quotability >= 55) signals.push("a quotable line");
+  const len = (m.end - m.start).toFixed(0);
+  if (signals.length === 0) {
+    return `The top-ranked moment in your video — a ${len}s window worth shipping as-is.`;
+  }
+  const base = `This is the strongest-ranked window: ${signals.join(", ")} over ${len}s`;
+  if (m.transcript) {
+    const quote = m.transcript.length > 64 ? m.transcript.slice(0, 64) + "…" : m.transcript;
+    return `${base}, opening on “${quote}”.`;
+  }
+  return `${base}.`;
+}
+
+function ScoreRing({ score }: { score: number }) {
+  const r = 20;
+  const c = 2 * Math.PI * r;
+  const filled = (Math.min(100, score) / 100) * c;
+  return (
+    <div className="relative h-12 w-12 shrink-0">
+      <svg viewBox="0 0 48 48" className="h-12 w-12 -rotate-90">
+        <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3.5" />
+        <circle
+          cx="24"
+          cy="24"
+          r={r}
+          fill="none"
+          stroke="white"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${c}`}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-white">
+        {score}
+      </span>
+    </div>
+  );
+}
+
+function HeroHighlightCard({
+  m,
+  onMakeShort,
+}: {
+  m: RankedHighlight;
+  onMakeShort: () => void;
+}) {
+  const media = useStudio((s) => s.media);
+  const aspect = useStudio((s) => s.aspect);
+  const addClip = useStudio((s) => s.addClip);
+  const setPlayhead = useStudio((s) => s.setPlayhead);
+  const setPlaying = useStudio((s) => s.setPlaying);
+  const showToast = useStudio((s) => s.showToast);
+  const clips = useStudio((s) => s.clips);
+  const [thumb, setThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!media) return;
+    let alive = true;
+    extractThumb({ url: media.url, time: m.start + 0.25, aspect })
+      .then((dataUrl) => {
+        if (alive) setThumb(dataUrl);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [media, aspect, m.start, m.id]);
+
+  const added = useMemo(
+    () => clips.some((c) => Math.abs(c.start - m.start) < 0.05 && Math.abs(c.end - m.end) < 0.05),
+    [clips, m.start, m.end]
+  );
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-white/60 bg-white/[0.09] shadow-[0_0_40px_rgba(255,255,255,0.12)]">
+      <div className="relative aspect-video w-full bg-black">
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumb} alt={m.label} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center font-mono text-[10px] text-white/25">
+            frame…
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
+        <span className="absolute top-2 left-2 rounded-full bg-white px-2.5 py-1 font-mono text-[10px] font-bold text-black shadow">
+          #1 BEST MOMENT
+        </span>
+        <div className="absolute top-2 right-2 rounded-2xl bg-black/60 p-1.5 backdrop-blur">
+          <ScoreRing score={m.score} />
+        </div>
+      </div>
+
+      <div className="p-3">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate rounded-full border border-white/20 bg-black/60 px-2 py-0.5 text-[10px] text-white backdrop-blur">
+            {m.reason.emoji} {m.reason.label}
+          </span>
+          <span className="rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-mono text-white/80 backdrop-blur">
+            {m.source === "ai" ? "AI" : "LOCAL"}
+          </span>
+          <span className="ml-auto font-mono text-[10px] whitespace-nowrap text-white/45">
+            {fmtClock(m.start)} → {fmtClock(m.end)} · {(m.end - m.start).toFixed(1)}s
+          </span>
+        </div>
+
+        {m.transcript && (
+          <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-white/80">
+            “{m.transcript}”
+          </p>
+        )}
+
+        <div className="mt-2.5 rounded-xl border border-white/10 bg-black/40 p-2.5">
+          <p className="s-label">Why this clip</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-white/60">{whyThisClip(m)}</p>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <button
+            onClick={onMakeShort}
+            className="col-span-2 rounded-full bg-white px-3 py-2.5 text-[11px] font-bold text-black transition-colors hover:bg-white/85"
+          >
+            ⚡ Make this a Short
+          </button>
+          <button
+            onClick={() => {
+              setPlayhead(m.start);
+              setPlaying(true);
+              showToast(`Previewing #${m.rank}`);
+            }}
+            className="rounded-full border border-white/25 px-3 py-2.5 text-[11px] font-medium text-white/80 transition-colors hover:border-white/60 hover:text-white"
+          >
+            Preview
+          </button>
+        </div>
+        <button
+          onClick={() => {
+            if (added) return;
+            addClip(m);
+            showToast("Clip added to timeline");
+          }}
+          disabled={added}
+          className={`mt-2 w-full rounded-full px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 ${
+            added ? "bg-white/5 text-white/40" : "border border-white/25 text-white/80 hover:bg-white/10"
+          }`}
+        >
+          {added ? "In timeline" : "Add to timeline"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ContentIntelligencePanel() {
+  const captions = useStudio((s) => s.captions);
+  const showToast = useStudio((s) => s.showToast);
+  const ci = useMemo(() => (captions.length > 0 ? contentIntelligence(captions) : null), [captions]);
+
+  const copy = (text: string, label: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    showToast(`${label} copied`);
+  };
+
+  if (!ci) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+        <p className="s-label">Content intelligence</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-white/45">
+          Transcribe the video and ittyclip builds a title, hook, description and hashtags from your actual
+          words — ready to paste into the platform.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+      <div className="flex items-center justify-between">
+        <p className="s-label">Content intelligence</p>
+        <span className="rounded-full border border-white/20 px-2 py-0.5 font-mono text-[8px] tracking-wider text-white/50 uppercase">
+          from your words
+        </span>
+      </div>
+      <div className="mt-2.5 flex flex-col gap-2">
+        {(
+          [
+            ["Title", ci.title],
+            ["Hook", ci.hook],
+            ["Category", ci.category],
+          ] as const
+        ).map(([label, value]) => (
+          <button
+            key={label}
+            onClick={() => copy(value, label)}
+            className="group flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-left transition-colors hover:border-white/30"
+          >
+            <span className="w-16 shrink-0 font-mono text-[9px] tracking-wider text-white/40 uppercase">
+              {label}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-white/80">{value}</span>
+            <span className="text-[9px] text-white/30 group-hover:text-white/70">copy</span>
+          </button>
+        ))}
+        <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+          <p className="font-mono text-[9px] tracking-wider text-white/40 uppercase">Description</p>
+          <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-white/70">{ci.description}</p>
+          <button onClick={() => copy(ci.description, "Description")} className="mt-1.5 text-[9px] text-white/30 hover:text-white/70">
+            copy
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {ci.hashtags.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => copy(`#${tag}`, "Hashtag")}
+              className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] text-white/70 transition-colors hover:bg-white/15"
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AITab({ onExport }: { onExport: () => void }) {
   const pending = useStudio((s) => s.pendingHighlights);
   const clipLength = useStudio((s) => s.clipLength);
   const setClipLength = useStudio((s) => s.setClipLength);
@@ -160,11 +392,24 @@ function HighlightsTab() {
   const aiFailed = useStudio((s) => s.aiFailed);
   const analyzeWithAI = useStudio((s) => s.analyzeWithAI);
   const media = useStudio((s) => s.media);
+  const makeShort = useStudio((s) => s.makeShort);
 
   const canAI = captions.length > 0 && !aiAnalyzing;
+  const hero = pending[0] ?? null;
+  const rest = pending.slice(1);
 
   return (
     <div className="flex flex-col gap-2.5 p-3">
+      {hero && (
+        <HeroHighlightCard
+          m={hero}
+          onMakeShort={() => {
+            makeShort(hero.id);
+            onExport();
+          }}
+        />
+      )}
+
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5">
         <div className="flex items-center justify-between">
           <p className="s-label">
@@ -238,11 +483,13 @@ function HighlightsTab() {
         </button>
       )}
 
+      <ContentIntelligencePanel />
+
       {pending.length === 0 && (
         <p className="mt-6 text-center text-xs text-white/40">No highlights yet — drop a video to scan.</p>
       )}
 
-      {pending.map((m) => (
+      {rest.map((m) => (
         <HighlightCard key={m.id} m={m} rank={m.rank} />
       ))}
     </div>
@@ -544,6 +791,10 @@ function CaptionsTab() {
             No captions yet. Transcribe above, or paste a transcript.
           </p>
         )}
+      </div>
+
+      <div className="border-t border-white/10 pt-1">
+        <StylesTab />
       </div>
     </div>
   );
@@ -1062,18 +1313,190 @@ function ReframeTab() {
   );
 }
 
-export function MediaPanel() {
-  const [tab, setTab] = useState<Tab>("highlights");
+function EditTab() {
+  const clips = useStudio((s) => s.clips);
+  const activeClipId = useStudio((s) => s.activeClipId);
+  const setActiveClip = useStudio((s) => s.setActiveClip);
+  const removeClip = useStudio((s) => s.removeClip);
+  const updateClip = useStudio((s) => s.updateClip);
+  const addAll = useStudio((s) => s.addAllHighlights);
+  const clearTimeline = useStudio((s) => s.clearTimeline);
+  const pending = useStudio((s) => s.pendingHighlights);
+  const setPlayhead = useStudio((s) => s.setPlayhead);
+  const showToast = useStudio((s) => s.showToast);
+  const commitHistory = useStudio((s) => s.commitHistory);
+
+  return (
+    <div className="flex flex-col gap-2.5 p-3">
+      <div className="flex items-center justify-between px-1">
+        <p className="s-label">
+          Timeline · {clips.length} clip{clips.length === 1 ? "" : "s"}
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              addAll();
+              showToast("All highlights added to timeline");
+            }}
+            disabled={pending.length === 0}
+            className="s-btn px-2.5 py-1 text-[10px]"
+          >
+            Add all
+          </button>
+          <button
+            onClick={() => {
+              if (clips.length === 0) return;
+              clearTimeline();
+              showToast("Timeline cleared");
+            }}
+            disabled={clips.length === 0}
+            className="s-btn px-2.5 py-1 text-[10px]"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      {clips.length === 0 && (
+        <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center text-[11px] leading-relaxed text-white/40">
+          Nothing on the timeline yet. Add highlights from the AI tab, or press{" "}
+          <kbd className="rounded border border-white/20 px-1 font-mono text-[9px] text-white/70">A</kbd> to clip at the
+          playhead.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {clips.map((c, i) => (
+          <div
+            key={c.id}
+            className={`rounded-2xl border p-2.5 transition-colors ${
+              activeClipId === c.id ? "border-white/50 bg-white/[0.08]" : "border-white/10 bg-white/[0.04]"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveClip(activeClipId === c.id ? null : c.id)}
+                className="min-w-0 flex-1 text-left"
+                title="Select this clip"
+              >
+                <span className="block truncate text-[11px] font-semibold text-white/85">
+                  {c.label || `Clip ${i + 1}`}
+                </span>
+                <span className="font-mono text-[9px] text-white/45">
+                  {fmtClock(c.start)} → {fmtClock(c.end)} · {(c.end - c.start).toFixed(1)}s
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setPlayhead(c.start);
+                  showToast(`Seeking to ${fmtClock(c.start)}`);
+                }}
+                className="s-btn px-2 py-1 text-[10px]"
+              >
+                Seek
+              </button>
+              <button
+                onClick={() => removeClip(c.id)}
+                className="rounded px-1.5 text-xs text-white/30 transition-colors hover:text-white"
+                aria-label="Remove clip"
+              >
+                ×
+              </button>
+            </div>
+            <input
+              value={c.label}
+              onChange={(e) => updateClip(c.id, { label: e.target.value })}
+              onBlur={() => commitHistory()}
+              aria-label="Clip label"
+              className="s-input mt-1.5 px-2 py-1 text-[10px]"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ExportTab({ onExport }: { onExport: () => void }) {
+  const clips = useStudio((s) => s.clips);
+  const aspect = useStudio((s) => s.aspect);
+  const reframe = useStudio((s) => s.reframe);
+  const captions = useStudio((s) => s.captions);
+  const exportState = useStudio((s) => s.exportState);
+  const exportResultUrl = useStudio((s) => s.exportResultUrl);
+  const showToast = useStudio((s) => s.showToast);
+
+  const busy = exportState === "running" || exportState === "loading";
+
+  const downloadLast = () => {
+    if (!exportResultUrl) return;
+    const a = document.createElement("a");
+    a.href = exportResultUrl;
+    a.download = `ittyclip-${aspect}-export.mp4`;
+    a.click();
+    showToast("Downloading export");
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5 p-3">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+        <p className="s-label mb-2">Export summary</p>
+        <div className="flex flex-col gap-1.5 font-mono text-[10px] text-white/55">
+          <p>
+            <span className="text-white/35">clips:</span> {clips.length > 0 ? `${clips.length} in timeline` : "full video"}
+          </p>
+          <p>
+            <span className="text-white/35">aspect:</span> {aspect}
+          </p>
+          <p>
+            <span className="text-white/35">captions:</span> {captions.length > 0 ? `${captions.length} lines` : "off"}
+          </p>
+          <p>
+            <span className="text-white/35">reframe:</span>{" "}
+            {reframe.enabled ? (reframe.mode === "tracked" ? "tracked" : "center") : "off"}
+          </p>
+        </div>
+        <button
+          onClick={onExport}
+          disabled={busy}
+          className="mt-3 w-full rounded-full bg-white px-3 py-2.5 text-[11px] font-bold text-black transition-colors hover:bg-white/85 disabled:opacity-40"
+        >
+          {busy ? "Exporting…" : "Open export dialog"}
+        </button>
+      </div>
+
+      {exportState === "done" && exportResultUrl && (
+        <div className="rounded-2xl border border-white/15 bg-white/[0.06] p-3">
+          <p className="s-label mb-2">Last export</p>
+          <button
+            onClick={downloadLast}
+            className="block w-full rounded-full bg-white px-3 py-2 text-center text-[11px] font-semibold text-black transition-colors hover:bg-white/85"
+          >
+            Download result
+          </button>
+        </div>
+      )}
+
+      <p className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-[10px] leading-relaxed text-white/40">
+        Encoding runs entirely in your browser with ffmpeg.wasm — nothing is uploaded.
+      </p>
+    </div>
+  );
+}
+
+export function MediaPanel({ onExport }: { onExport: () => void }) {
+  const [tab, setTab] = useState<Tab>("ai");
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-black/40 lg:w-80">
       <div className="s-seg mx-3 mt-3">
         {(
           [
-            ["highlights", "Highlights"],
+            ["ai", "AI"],
+            ["edit", "Edit"],
             ["captions", "Captions"],
-            ["styles", "Styles"],
             ["reframe", "Reframe"],
+            ["export", "Export"],
           ] as [Tab, string][]
         ).map(([key, label]) => (
           <button
@@ -1087,10 +1510,11 @@ export function MediaPanel() {
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === "highlights" && <HighlightsTab />}
+        {tab === "ai" && <AITab onExport={onExport} />}
+        {tab === "edit" && <EditTab />}
         {tab === "captions" && <CaptionsTab />}
-        {tab === "styles" && <StylesTab />}
         {tab === "reframe" && <ReframeTab />}
+        {tab === "export" && <ExportTab onExport={onExport} />}
       </div>
     </aside>
   );

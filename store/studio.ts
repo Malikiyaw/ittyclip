@@ -69,6 +69,8 @@ interface StudioState {
   pendingProject: ProjectFile | null;
   undoStack: HistoryEntry[];
   redoStack: HistoryEntry[];
+  projectName: string;
+  dirty: boolean;
 
   ingest: (file: File) => Promise<void>;
   cancelAnalysis: () => void;
@@ -121,6 +123,10 @@ interface StudioState {
   redo: () => void;
   showToast: (msg: string) => void;
   reset: () => void;
+  setProjectName: (name: string) => void;
+  newProject: () => void;
+  markSaved: () => void;
+  makeShort: (id: string) => void;
 }
 
 const cloneReframe = (r: ReframeState): ReframeState => ({
@@ -141,6 +147,7 @@ const pushHistory = (s: StudioState) => {
   s.undoStack.push(snapshot(s));
   if (s.undoStack.length > 80) s.undoStack.shift();
   s.redoStack = [];
+  s.dirty = true;
 };
 
 const applyHistory = (entry: HistoryEntry): Partial<StudioState> => ({
@@ -206,6 +213,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
   pendingProject: null,
   undoStack: [],
   redoStack: [],
+  projectName: "",
+  dirty: false,
 
   ingest: async (file: File) => {
     const state = get();
@@ -287,6 +296,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
       isPlaying: false,
       undoStack: [],
       redoStack: [],
+      projectName: file.name,
+      dirty: false,
     });
 
     const pj = get().pendingProject;
@@ -302,6 +313,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
         reframe: cloneReframe(pj.reframe),
         clipLength: CLIP_LENGTHS.includes(pj.settings.clipLength) ? pj.settings.clipLength : 30,
         pendingProject: null,
+        projectName: pj.project.name,
+        dirty: false,
       });
       set({ toast: "Project restored with the original media." });
     }
@@ -333,6 +346,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   updateClip: (id, patch) => {
     set((s) => ({
       clips: s.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      dirty: true,
     }));
   },
   setActiveClip: (id) => set({ activeClipId: id }),
@@ -371,7 +385,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
 
   setClipLength: (len) => {
     if (!CLIP_LENGTHS.includes(len)) return;
-    set({ clipLength: len });
+    set({ clipLength: len, dirty: true });
     if (get().highlightSource === "ai") {
       set({ toast: `Clip length: ${len}s — AI picks keep their windows` });
       return;
@@ -461,6 +475,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   updateCaption: (id, patch) => {
     set((s) => ({
       captions: s.captions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      dirty: true,
     }));
   },
   removeCaption: (id) => {
@@ -477,7 +492,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
     });
   },
   updateCaptionSettings: (patch) => {
-    set((s) => ({ captionSettings: { ...s.captionSettings, ...patch } }));
+    set((s) => ({ captionSettings: { ...s.captionSettings, ...patch }, dirty: true }));
   },
   toggleCaptions: () => set((s) => ({ showCaptions: !s.showCaptions })),
   toggleSafeZones: () => set((s) => ({ showSafeZones: !s.showSafeZones })),
@@ -488,7 +503,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
   setZoom: (z) => set({ zoom: Math.min(320, Math.max(30, z)) }),
 
   updateReframe: (patch) => {
-    set((s) => ({ reframe: { ...s.reframe, ...patch } }));
+    set((s) => ({ reframe: { ...s.reframe, ...patch }, dirty: true }));
   },
   commitReframe: () => pushHistory(get()),
 
@@ -576,6 +591,8 @@ export const useStudio = create<StudioState>()((set, get) => ({
         reframe: cloneReframe(pj.reframe),
         clipLength: CLIP_LENGTHS.includes(pj.settings.clipLength) ? pj.settings.clipLength : 30,
         activeClipId: null,
+        projectName: pj.project.name,
+        dirty: false,
       });
       set({ toast: "Project loaded." });
     } else {
@@ -595,7 +612,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
     }
     s.redoStack.push(snapshot(s));
     if (s.redoStack.length > 80) s.redoStack.shift();
-    set({ ...applyHistory(entry), toast: "Undone" });
+    set({ ...applyHistory(entry), toast: "Undone", dirty: true });
   },
 
   redo: () => {
@@ -607,7 +624,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
     }
     s.undoStack.push(snapshot(s));
     if (s.undoStack.length > 80) s.undoStack.shift();
-    set({ ...applyHistory(entry), toast: "Redone" });
+    set({ ...applyHistory(entry), toast: "Redone", dirty: true });
   },
 
   showToast: (msg) => {
@@ -659,6 +676,65 @@ export const useStudio = create<StudioState>()((set, get) => ({
       pendingProject: null,
       undoStack: [],
       redoStack: [],
+      projectName: "",
+      dirty: false,
     });
+  },
+
+  setProjectName: (name) => set({ projectName: name, dirty: true }),
+
+  newProject: () => {
+    pushHistory(get());
+    set({
+      clips: [],
+      captions: [],
+      captionStyle: "pop",
+      captionSettings: presetFor("pop"),
+      showSafeZones: false,
+      reframe: { ...DEFAULT_REFRAME },
+      aspect: "9:16",
+      activeClipId: null,
+      playhead: 0,
+      isPlaying: false,
+      undoStack: [],
+      redoStack: [],
+      projectName: "Untitled",
+      dirty: false,
+    });
+    set({ toast: "New project — timeline cleared" });
+  },
+
+  markSaved: () => set({ dirty: false }),
+
+  makeShort: (id) => {
+    const s = get();
+    const h = s.pendingHighlights.find((x) => x.id === id);
+    if (!h) {
+      set({ toast: "Pick a highlight first" });
+      return;
+    }
+    const exists = s.clips.some(
+      (c) => Math.abs(c.start - h.start) < 0.05 && Math.abs(c.end - h.end) < 0.05
+    );
+    if (exists) {
+      const existing = s.clips.find(
+        (c) => Math.abs(c.start - h.start) < 0.05 && Math.abs(c.end - h.end) < 0.05
+      );
+      get().setActiveClip(existing?.id ?? null);
+    } else {
+      get().addClip(h);
+    }
+    set({
+      aspect: "9:16",
+      reframe: {
+        ...s.reframe,
+        enabled: true,
+        mode: s.reframe.track ? "tracked" : "center",
+        scale: Math.max(s.reframe.scale, 1.3),
+        status: s.reframe.track ? "done" : "idle",
+      },
+      showCaptions: s.captions.length > 0 ? true : s.showCaptions,
+    });
+    set({ toast: "Short staged — 9:16 · auto-reframe · captions" });
   },
 }));
