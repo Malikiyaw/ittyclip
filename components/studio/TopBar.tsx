@@ -84,7 +84,7 @@ export function TopBar({ onExport }: { onExport: () => void }) {
             <path d="M5 3.5 L13 8 L5 12.5 Z" fill="black" />
           </svg>
         </span>
-        <span className="s-display hidden text-lg text-white xs:inline sm:inline">ittyclip</span>
+        <span className="s-display hidden text-lg text-white sm:inline">ittyclip</span>
       </Link>
 
       <span className="hidden h-6 w-px bg-white/10 sm:block" aria-hidden />
