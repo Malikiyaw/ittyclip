@@ -45,6 +45,14 @@ export interface CaptionLine {
   words: Word[];
 }
 
+export interface VisualEvent {
+  time: number;
+  /** 0..1 scene-change / visual-motion strength. */
+  change: number;
+  /** Whether a face was detected in the sampled frame. */
+  face: boolean;
+}
+
 export type CaptionStyleKey = "classic" | "pop" | "karaoke" | "neon" | "minimal" | "bold";
 
 export const CAPTION_STYLES: { key: CaptionStyleKey; label: string }[] = [
@@ -59,15 +67,12 @@ export const CAPTION_STYLES: { key: CaptionStyleKey; label: string }[] = [
 export type CaptionAnimation = "none" | "pop" | "fade" | "slide-up" | "word-pop";
 
 export interface CaptionSettings {
-  /** "display" = Archivo Black (matches burned export), "sans" = Inter. */
   font: "display" | "sans";
-  /** Font size multiplier. */
   size: number;
   weight: "normal" | "semibold" | "bold" | "black";
   textColor: string;
   highlightColor: string;
   position: "bottom" | "middle" | "top";
-  /** Max text width as a fraction of the preview width. */
   maxWidth: number;
   stroke: boolean;
   shadow: boolean;
@@ -81,15 +86,13 @@ export interface CaptionSettings {
 export interface AnalysisResult {
   duration: number;
   envelope: Float32Array;
-  /** 50ms hop between envelope samples, seconds. */
   hopSec: number;
-  /** Speech segments (inverse of silence). */
   speech: { start: number; end: number }[];
-  /** Normalized energy peaks for AI/analysis consumption. */
   energy: { time: number; value: number }[];
-  /** Legacy top-6 moment list (kept for compatibility). */
   moments: Moment[];
   silence: { start: number; end: number }[];
+  /** Lightweight sampled visual events used to improve highlight ranking. */
+  visualEvents?: VisualEvent[];
 }
 
 export type ClipLength = 15 | 30 | 45 | 60;
