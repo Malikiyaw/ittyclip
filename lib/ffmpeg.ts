@@ -107,16 +107,11 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   finally { instance.off("log", onLog); }
 
   const data = await instance.readFile(job.format === "mp4" ? "out.mp4" : "out.webm");
-  if (typeof data === "string") {
-    throw new Error("FFmpeg returned text instead of a binary output file.");
-  }
-
-  // TypeScript's current DOM lib requires BlobPart ArrayBufferViews to be
-  // backed by a concrete ArrayBuffer. FFmpeg's Uint8Array is typed with
-  // ArrayBufferLike, so copy it into a fresh ArrayBuffer before creating Blob.
+  if (typeof data === "string") throw new Error("FFmpeg returned text instead of a binary output file.");
   const outputBuffer = new ArrayBuffer(data.byteLength);
   new Uint8Array(outputBuffer).set(data);
   const blob = new Blob([outputBuffer], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
   job.onProgress(1);
-  return { blob, name: `${job.name || "ittyclip-export"}.${job.format}` };
+  const safeName = (job.clipName || "ittyclip-export").trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "ittyclip-export";
+  return { blob, name: `${safeName}.${job.format}` };
 }
