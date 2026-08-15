@@ -4,8 +4,6 @@ import type { CaptionLine, CaptionSettings, ExportJob } from "@/lib/types";
 import { escapeDrawtext } from "@/lib/captions";
 import { buildCropExpression } from "@/lib/reframe/trajectory";
 
-// Portable single-threaded FFmpeg core. It does not require SharedArrayBuffer
-// or cross-origin isolation, so Safari/iOS can export without special flags.
 const BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
@@ -109,14 +107,16 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   finally { instance.off("log", onLog); }
 
   const data = await instance.readFile(job.format === "mp4" ? "out.mp4" : "out.webm");
-  // readFile() returns binary Uint8Array data for a real FFmpeg output file.
-  // Keep the string case as an explicit runtime guard rather than casting a
-  // string to ArrayBuffer (which newer TypeScript versions reject).
   if (typeof data === "string") {
     throw new Error("FFmpeg returned text instead of a binary output file.");
   }
-  const bytes: Uint8Array = data;
-  const blob = new Blob([bytes], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
+
+  // TypeScript's current DOM lib requires BlobPart ArrayBufferViews to be
+  // backed by a concrete ArrayBuffer. FFmpeg's Uint8Array is typed with
+  // ArrayBufferLike, so copy it into a fresh ArrayBuffer before creating Blob.
+  const outputBuffer = new ArrayBuffer(data.byteLength);
+  new Uint8Array(outputBuffer).set(data);
+  const blob = new Blob([outputBuffer], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
   job.onProgress(1);
   return { blob, name: `${job.name || "ittyclip-export"}.${job.format}` };
 }
