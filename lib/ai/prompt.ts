@@ -1,98 +1,54 @@
-import type { ClipLength } from "@/lib/types";
+import type { ClipLength, VisualEvent } from "@/lib/types";
 
 export interface AiPromptSignals {
   duration: number;
   silence: { start: number; end: number }[];
   speech: { start: number; end: number }[];
   energy: { time: number; value: number }[];
+  visualEvents?: VisualEvent[];
 }
+export interface AiTranscriptLine { start: number; end: number; text: string; }
+export const fmtSec = (t: number) => { const m = Math.floor(t / 60); const s = t % 60; return `${m}:${s.toFixed(1).padStart(4, "0")}`; };
 
-export interface AiTranscriptLine {
-  start: number;
-  end: number;
-  text: string;
-}
-
-export const fmtSec = (t: number) => {
-  const m = Math.floor(t / 60);
-  const s = t % 60;
-  return `${m}:${s.toFixed(1).padStart(4, "0")}`;
-};
-
-/**
- * Builds the strict-JSON prompt for the highlight-selection model.
- * Shared by the API route (server) and tests (node).
- */
-export function buildPrompt(input: {
-  transcript: AiTranscriptLine[];
-  signals: AiPromptSignals;
-  clipLength: ClipLength;
-  count: number;
-}): { system: string; user: string } {
+export function buildPrompt(input: { transcript: AiTranscriptLine[]; signals: AiPromptSignals; clipLength: ClipLength; count: number }): { system: string; user: string } {
   const { transcript, signals, clipLength, count } = input;
+  const transcriptBlock = transcript.length === 0 ? "(no transcript available)" : transcript.map((l) => `[${fmtSec(l.start)} - ${fmtSec(l.end)}] ${l.text}`).join("\n");
+  const energyBlock = signals.energy.map((p) => `@${fmtSec(p.time)} ${p.value.toFixed(2)}`).join(", ");
+  const silenceBlock = signals.silence.slice(0, 120).map((s) => `[${fmtSec(s.start)} - ${fmtSec(s.end)}]`).join(", ");
+  const visualBlock = (signals.visualEvents ?? []).filter((e) => e.change >= 0.28 || e.face).slice(0, 100).map((e) => `@${fmtSec(e.time)} change=${e.change.toFixed(2)}${e.face ? " face" : ""}`).join(", ");
 
-  const transcriptBlock =
-    transcript.length === 0
-      ? "(no transcript available)"
-      : transcript
-          .map((l) => `[${fmtSec(l.start)} - ${fmtSec(l.end)}] ${l.text}`)
-          .join("\n");
-
-  const energyBlock = signals.energy
-    .map((p) => `@${fmtSec(p.time)} ${p.value.toFixed(2)}`)
-    .join(", ");
-
-  const silenceBlock = signals.silence
-    .slice(0, 120)
-    .map((s) => `[${fmtSec(s.start)} - ${fmtSec(s.end)}]`)
-    .join(", ");
-
-  const system = `You are an elite short-form video editor with deep knowledge of what makes clips work on TikTok, Instagram Reels, and YouTube Shorts.
-You receive a word-timed transcript of a long video plus audio signal summaries, and you must choose the ${count} best ${clipLength}-second segments to publish as standalone short-form clips.
+  const system = `You are an elite short-form video editor with deep knowledge of TikTok, Instagram Reels, and YouTube Shorts. You receive a word-timed transcript plus audio and lightweight visual event summaries. Choose the ${count} best ${clipLength}-second segments as standalone clips.
 
 Requirements:
-1. Prefer moments with strong hooks, surprising reveals, specific numbers, clear questions, emotional statements, or standalone insight.
-2. A clip must start and end at natural speech boundaries — never cut mid-word or mid-sentence.
-3. Respect the target length: between ${Math.round(clipLength * 0.88)} and ${Math.round(clipLength * 1.12)} seconds where the content allows, but slightly shorter is better than slightly longer.
-4. Do not pick overlapping moments — each clip must cover different content.
-5. Score each clip 0-100 based on expected engagement (hook strength, pacing, emotional impact).
-6. Give each clip a short punchy title (max 6 words) suitable as a social caption.
-7. Choose the single most likely reason category for each clip from this exact list: energy, question, statement, quote, surprise, insight, pacing, hook, story, general.
-8. Answer with valid JSON only — no markdown, no commentary.
+1. Prefer strong hooks, surprising reveals, specific numbers, clear questions, emotional statements, or standalone insight.
+2. Use visual events as supporting evidence: scene changes and visible faces can increase engagement, but never override a weak story.
+3. Start and end at natural speech boundaries — never cut mid-word or mid-sentence.
+4. Respect the target length: between ${Math.round(clipLength * 0.88)} and ${Math.round(clipLength * 1.12)} seconds where content allows.
+5. Do not pick overlapping moments; maximize topic and content diversity.
+6. Score each clip 0-100 based on hook strength, pacing, emotional impact, standalone value, and visual support.
+7. Give each clip a punchy title (max 6 words).
+8. Choose one reasonKey from: energy, question, statement, quote, surprise, insight, pacing, hook, story, general.
+9. Return valid JSON only — no markdown or commentary.
 
 JSON schema:
-{
-  "highlights": [
-    {
-      "start": <seconds, number>,
-      "end": <seconds, number>,
-      "score": <0-100, integer>,
-      "title": "<string, max 6 words>",
-      "reasonKey": "<one of: energy, question, statement, quote, surprise, insight, pacing, hook, story, general>",
-      "reason": "<one short sentence explaining why this moment works>"
-    }
-  ]
-}`;
+{"highlights":[{"start":<seconds>,"end":<seconds>,"score":<0-100 integer>,"title":"<max 6 words>","reasonKey":"<allowed key>","reason":"<one short sentence>"}]}`;
 
   const user = `VIDEO METADATA
 - Duration: ${fmtSec(signals.duration)} (${signals.duration.toFixed(1)}s)
 - Target clip length: ${clipLength}s
 - Clips to return: ${count}
 
-TRANSCRIPT (word-timed, seconds since start)
+TRANSCRIPT (word-timed)
 ${transcriptBlock}
 
 AUDIO SIGNALS
-- Silence segments (no speech): ${silenceBlock || "none"}
-- Speech segments: ${
-    signals.speech
-      .slice(0, 80)
-      .map((s) => `[${fmtSec(s.start)} - ${fmtSec(s.end)}]`)
-      .join(", ") || "none"
-  }
-- Energy peaks (relative loudness 0-1): ${energyBlock || "none"}
+- Silence segments: ${silenceBlock || "none"}
+- Speech segments: ${signals.speech.slice(0, 80).map((s) => `[${fmtSec(s.start)} - ${fmtSec(s.end)}]`).join(", ") || "none"}
+- Energy peaks: ${energyBlock || "none"}
+
+VISUAL EVENTS
+- High-change / face frames: ${visualBlock || "none"}
 
 Return the JSON now.`;
-
   return { system, user };
 }
