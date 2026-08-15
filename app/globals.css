@@ -1273,10 +1273,258 @@ body.menu-open {
   .swiss .headline {
     color: var(--text);
   }
+}
 
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+/* ================================================================== */
+/* Studio — Swiss monochrome (matches landing)                        */
+/* ================================================================== */
+
+.studio {
+  background: #000;
+  color: #fff;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+.studio-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%);
+}
+
+@layer components {
+  .s-display {
+    font-family: "BubbledotICG-FinePos", "Geist Pixel Circle", monospace;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  .s-label {
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .s-panel {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .s-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  }
+
+  .s-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+  }
+
+  .s-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .s-btn-solid {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #fff;
+    color: #000;
+    border: 1px solid #fff;
+    border-radius: 999px;
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 16px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px -10px rgba(255, 255, 255, 0.35);
+    transition: background 0.2s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+
+  .s-btn-solid:hover {
+    background: #e6e6e6;
+    border-color: #e6e6e6;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 30px -10px rgba(255, 255, 255, 0.4);
+  }
+
+  .s-btn-solid:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .s-seg {
+    display: flex;
+    gap: 3px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 3px;
+  }
+
+  .s-seg button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .s-seg button:hover {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .s-seg button.active {
+    background: #fff;
+    color: #000;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+  }
+
+  .s-seg-light {
+    display: flex;
+    gap: 3px;
+    background: #f1f1f3;
+    border-radius: 999px;
+    padding: 3px;
+  }
+
+  .s-seg-light button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: #777;
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 9px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .s-seg-light button.active {
+    background: #111;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  }
+
+  .s-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .s-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 9px 12px;
+    color: #fff;
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 12.5px;
+    transition: border-color 0.2s ease;
+  }
+
+  .s-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .s-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .s-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #fff;
+    color: #000;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    font-weight: 600;
+  }
+}
+
+.studio input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  cursor: pointer;
+}
+
+.studio input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 10px rgba(255, 255, 255, 0.35);
+  cursor: grab;
+}
+
+.studio input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 10px rgba(255, 255, 255, 0.35);
+  cursor: grab;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-btn,
+  .s-btn-solid,
+  .s-seg button,
+  .s-seg-light button,
+  .s-input,
+  .s-chip {
+    transition: none !important;
   }
 }

@@ -46,22 +46,22 @@ function HighlightsTab() {
   const inTimeline = useMemo(() => new Set(clips.map((c) => c.start.toFixed(3))), [clips]);
 
   return (
-    <div className="flex flex-col gap-2 p-3">
-      <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] tracking-widest text-mute uppercase">
+    <div className="flex flex-col gap-2.5 p-3">
+      <div className="flex items-center justify-between px-1">
+        <p className="s-label">
           Engine found {pending.length}
         </p>
         <button
           onClick={addAll}
           disabled={pending.length === 0}
-          className="rounded-full border border-brand/50 bg-brand/15 px-3 py-1 font-mono text-[10px] text-brand2 transition-colors hover:bg-brand/25 disabled:opacity-40"
+          className="s-btn-solid px-3 py-1.5 text-[11px]"
         >
           + Add all
         </button>
       </div>
 
       {pending.length === 0 && (
-        <p className="mt-6 text-center text-xs text-mute">No highlights yet — drop a video to scan.</p>
+        <p className="mt-6 text-center text-xs text-white/40">No highlights yet — drop a video to scan.</p>
       )}
 
       {pending.map((m) => {
@@ -69,19 +69,21 @@ function HighlightsTab() {
         return (
           <div
             key={m.id}
-            className={`overflow-hidden rounded-xl border transition-colors ${added ? "border-brand2/40 bg-brand2/5" : "border-line bg-panel"}`}
+            className={`overflow-hidden rounded-2xl border transition-colors ${
+              added ? "border-white/25 bg-white/[0.06]" : "border-white/10 bg-white/[0.04]"
+            }`}
           >
-            <div className="relative aspect-video w-full bg-ink">
+            <div className="relative aspect-video w-full bg-black">
               {thumbs[m.id] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={thumbs[m.id]} alt={m.label} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full items-center justify-center font-mono text-[10px] text-mute/50">
+                <div className="flex h-full items-center justify-center font-mono text-[10px] text-white/25">
                   frame…
                 </div>
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-              <span className="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[10px] text-brand2 backdrop-blur">
+              <span className="s-badge absolute top-2 right-2 backdrop-blur">
                 {m.score}%
               </span>
               <span className="absolute bottom-2 left-2 truncate pr-2 text-xs font-semibold text-white drop-shadow">
@@ -89,7 +91,7 @@ function HighlightsTab() {
               </span>
             </div>
             <div className="flex items-center justify-between gap-2 p-2.5">
-              <span className="font-mono text-[10px] text-mute">
+              <span className="font-mono text-[10px] text-white/45">
                 {fmtClock(m.start)} → {fmtClock(m.end)} · {(m.end - m.start).toFixed(1)}s
               </span>
               <button
@@ -99,8 +101,10 @@ function HighlightsTab() {
                   showToast("Clip added to timeline");
                 }}
                 disabled={added}
-                className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                  added ? "bg-line text-mute" : "bg-gradient-to-r from-brand to-brand2 text-white hover:opacity-90"
+                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                  added
+                    ? "bg-white/5 text-white/30"
+                    : "bg-white text-black hover:bg-white/85"
                 }`}
               >
                 {added ? "In timeline" : "Add"}
@@ -151,12 +155,12 @@ function TranscribePanel() {
     stage === "model" ? "Downloading model…" : stage === "running" ? "Transcribing…" : "";
 
   return (
-    <div className="rounded-xl border border-brand/40 bg-gradient-to-b from-brand/10 to-panel p-3">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] tracking-widest text-brand2 uppercase">
+        <p className="s-label">
           Auto-transcribe · whisper.cpp
         </p>
-        <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[9px] text-mute">
+        <span className="s-chip px-2 py-0.5 text-[9px]">
           100% in-browser
         </span>
       </div>
@@ -168,15 +172,17 @@ function TranscribePanel() {
             <button
               key={key}
               onClick={() => setModel(key)}
-              className={`rounded-lg border p-2 text-left transition-colors ${
-                active ? "border-brand2/70 bg-brand2/10" : "border-line bg-panel hover:border-brand/40"
+              className={`rounded-xl border p-2 text-left transition-colors ${
+                active
+                  ? "border-white/60 bg-white/10"
+                  : "border-white/10 bg-white/[0.02] hover:border-white/30"
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-fg">{info.label}</span>
-                {cached[key] && <span className="text-[9px] text-brand2">● cached</span>}
+                <span className="text-[11px] font-semibold text-white">{info.label}</span>
+                {cached[key] && <span className="text-[9px] text-white/60">● cached</span>}
               </div>
-              <span className="font-mono text-[9px] text-mute">
+              <span className="font-mono text-[9px] text-white/40">
                 {info.size} · {info.hint}
               </span>
             </button>
@@ -186,13 +192,13 @@ function TranscribePanel() {
 
       {busy ? (
         <div className="mt-3">
-          <div className="h-1.5 overflow-hidden rounded-full bg-line">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-brand to-brand2 transition-[width] duration-150"
+              className="h-full rounded-full bg-white transition-[width] duration-150"
               style={{ width: `${Math.round(progress * 100)}%` }}
             />
           </div>
-          <p className="mt-1.5 font-mono text-[10px] text-mute">
+          <p className="mt-1.5 font-mono text-[10px] text-white/45">
             {stageLabel} {Math.round(progress * 100)}%
           </p>
         </div>
@@ -206,10 +212,10 @@ function TranscribePanel() {
             transcribe().catch(() => {});
           }}
           disabled={!media || (captions.length > 0 && stage === "done")}
-          className={`mt-3 w-full rounded-full px-3 py-2 text-[11px] font-semibold transition-opacity disabled:opacity-40 ${
+          className={`mt-3 w-full rounded-full px-3 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 ${
             captions.length > 0 && stage === "done"
-              ? "border border-line text-mute"
-              : "bg-gradient-to-r from-brand to-brand2 text-white hover:opacity-90"
+              ? "border border-white/20 text-white/50 hover:text-white"
+              : "bg-white text-black hover:bg-white/85"
           }`}
         >
           {captions.length > 0 && stage === "done"
@@ -263,8 +269,8 @@ function CaptionsTab() {
     <div className="flex flex-col gap-3 overflow-y-auto p-3">
       <TranscribePanel />
 
-      <div className="rounded-xl border border-line bg-panel p-3">
-        <p className="mb-2 font-mono text-[10px] tracking-widest text-mute uppercase">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+        <p className="s-label mb-2">
           Paste transcript → auto-timed
         </p>
         <textarea
@@ -272,7 +278,7 @@ function CaptionsTab() {
           onChange={(e) => setDraft(e.target.value)}
           rows={3}
           placeholder="Paste your transcript here. ittyclip will time every line to your audio…"
-          className="w-full resize-none rounded-lg border border-line bg-ink p-2.5 text-xs text-fg placeholder:text-mute/60 focus:border-brand/60 focus:outline-none"
+          className="s-input resize-none"
         />
         <div className="mt-2 flex gap-2">
           <button
@@ -281,7 +287,7 @@ function CaptionsTab() {
               makeFromText(draft);
               showToast("Captions timed to audio");
             }}
-            className="flex-1 rounded-full bg-gradient-to-r from-brand to-brand2 px-3 py-1.5 text-[11px] font-semibold text-white"
+            className="flex-1 rounded-full bg-white px-3 py-2 text-[11px] font-semibold text-black hover:bg-white/85"
           >
             Time it
           </button>
@@ -292,15 +298,15 @@ function CaptionsTab() {
               useStudio.getState().setCaptions(lines);
               showToast("Sample captions added");
             }}
-            className="rounded-full border border-line px-3 py-1.5 text-[11px] text-mute hover:text-fg"
+            className="s-btn px-3 py-2 text-[11px]"
           >
             Sample
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-line bg-panel p-3">
-        <p className="mb-2 font-mono text-[10px] tracking-widest text-mute uppercase">AI Hooks (from your words)</p>
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+        <p className="s-label mb-2">AI Hooks (from your words)</p>
         <div className="flex flex-wrap gap-1.5">
           {hooks.map((h) => (
             <button
@@ -309,7 +315,7 @@ function CaptionsTab() {
                 navigator.clipboard?.writeText(h).catch(() => {});
                 showToast("Hook copied");
               }}
-              className="rounded-full border border-hot/40 bg-hot/10 px-2.5 py-1 text-[10px] text-hot transition-colors hover:bg-hot/20"
+              className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[10px] text-white/70 transition-colors hover:bg-white/15 hover:text-white"
             >
               {h}
             </button>
@@ -318,7 +324,7 @@ function CaptionsTab() {
       </div>
 
       <div className="flex items-center justify-between px-1">
-        <p className="font-mono text-[10px] tracking-widest text-mute uppercase">
+        <p className="s-label">
           {captions.length} lines
         </p>
         <div className="flex gap-2">
@@ -327,19 +333,23 @@ function CaptionsTab() {
               addAt();
               showToast("Caption at playhead");
             }}
-            className="rounded-full border border-line px-3 py-1 text-[11px] text-mute hover:text-fg"
+            className="s-btn px-3 py-1 text-[11px]"
           >
             + at {fmtClock(playhead)}
           </button>
           <button
             onClick={toggleCaptions}
-            className={`rounded-full border px-3 py-1 text-[11px] ${showCaptions ? "border-brand2/50 text-brand2" : "border-line text-mute"}`}
+            className={`rounded-full border px-3 py-1 text-[11px] transition-colors ${
+              showCaptions
+                ? "border-white/60 bg-white/10 text-white"
+                : "border-white/20 text-white/50 hover:text-white"
+            }`}
           >
             {showCaptions ? "Visible" : "Hidden"}
           </button>
           <button
             onClick={downloadSrt}
-            className="rounded-full border border-line px-3 py-1 text-[11px] text-mute hover:text-fg"
+            className="s-btn px-3 py-1 text-[11px]"
           >
             SRT
           </button>
@@ -348,14 +358,14 @@ function CaptionsTab() {
 
       <div className="flex flex-col gap-2">
         {captions.map((c) => (
-          <div key={c.id} className="rounded-xl border border-line bg-panel p-2.5">
+          <div key={c.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-2.5">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[9px] text-mute">{fmtClock(c.start)}</span>
-              <span className="text-mute/40">—</span>
-              <span className="font-mono text-[9px] text-mute">{fmtClock(c.end)}</span>
+              <span className="font-mono text-[9px] text-white/45">{fmtClock(c.start)}</span>
+              <span className="text-white/20">—</span>
+              <span className="font-mono text-[9px] text-white/45">{fmtClock(c.end)}</span>
               <button
                 onClick={() => removeCaption(c.id)}
-                className="ml-auto rounded px-1.5 text-xs text-mute/60 hover:text-hot"
+                className="ml-auto rounded px-1.5 text-xs text-white/30 transition-colors hover:text-white"
                 aria-label="Delete caption"
               >
                 ×
@@ -369,7 +379,7 @@ function CaptionsTab() {
                   words: rebuildWords(e.target.value, c.start, c.end),
                 })
               }
-              className="mt-1.5 w-full rounded-lg border border-line bg-ink px-2.5 py-1.5 text-xs text-fg focus:border-brand/60 focus:outline-none"
+              className="s-input mt-1.5"
             />
             <div className="mt-1.5 flex gap-2">
               <input
@@ -378,7 +388,7 @@ function CaptionsTab() {
                 min={0}
                 value={Number(c.start.toFixed(1))}
                 onChange={(e) => updateCaption(c.id, { start: parseFloat(e.target.value) || 0 })}
-                className="w-20 rounded-md border border-line bg-ink px-2 py-1 font-mono text-[10px] text-mute focus:border-brand/60 focus:outline-none"
+                className="s-input w-20 px-2 py-1 font-mono text-[10px] text-white/60"
                 aria-label="Caption start time"
               />
               <input
@@ -387,14 +397,14 @@ function CaptionsTab() {
                 min={0}
                 value={Number(c.end.toFixed(1))}
                 onChange={(e) => updateCaption(c.id, { end: parseFloat(e.target.value) || 0 })}
-                className="w-20 rounded-md border border-line bg-ink px-2 py-1 font-mono text-[10px] text-mute focus:border-brand/60 focus:outline-none"
+                className="s-input w-20 px-2 py-1 font-mono text-[10px] text-white/60"
                 aria-label="Caption end time"
               />
             </div>
           </div>
         ))}
         {captions.length === 0 && (
-          <p className="text-center text-xs text-mute">
+          <p className="text-center text-xs text-white/40">
             No captions yet. Transcribe above, or paste a transcript.
           </p>
         )}
@@ -410,7 +420,7 @@ function StylesTab() {
 
   return (
     <div className="flex flex-col gap-2 p-3">
-      <p className="font-mono text-[10px] tracking-widest text-mute uppercase">Caption styles</p>
+      <p className="s-label px-1">Caption styles</p>
       {CAPTION_STYLES.map((s) => (
         <button
           key={s.key}
@@ -418,18 +428,20 @@ function StylesTab() {
             setStyle(s.key);
             showToast(`Style: ${s.label}`);
           }}
-          className={`rounded-xl border p-3 text-left transition-all ${
-            style === s.key ? "border-brand2/70 bg-brand2/10 ring-glow" : "border-line bg-panel hover:border-brand/40"
+          className={`rounded-2xl border p-3 text-left transition-all ${
+            style === s.key
+              ? "border-white/70 bg-white/10 shadow-[0_0_30px_rgba(255,255,255,0.08)]"
+              : "border-white/10 bg-white/[0.04] hover:border-white/30"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-fg">{s.label}</span>
-            {style === s.key && <span className="text-brand2">✓</span>}
+            <span className="text-xs font-semibold text-white">{s.label}</span>
+            {style === s.key && <span className="text-white">✓</span>}
           </div>
           <p className={`mt-2 font-display text-sm ${STYLE_SAMPLE[s.key]}`}>this is the moment</p>
         </button>
       ))}
-      <p className="mt-2 rounded-lg border border-line bg-panel p-2.5 text-[10px] leading-relaxed text-mute">
+      <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-[10px] leading-relaxed text-white/40">
         Styles render live on the preview and are burned into the export at the same size you see here.
       </p>
     </div>
@@ -440,8 +452,8 @@ export function MediaPanel() {
   const [tab, setTab] = useState<Tab>("highlights");
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-panel/50">
-      <div className="flex border-b border-line">
+    <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-black/40">
+      <div className="s-seg mx-3 mt-3">
         {(
           [
             ["highlights", "Highlights"],
@@ -452,11 +464,7 @@ export function MediaPanel() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex-1 border-b-2 px-2 py-3 text-xs font-medium transition-colors ${
-              tab === key
-                ? "border-brand2 bg-brand2/5 text-brand2"
-                : "border-transparent text-mute hover:text-fg"
-            }`}
+            className={tab === key ? "active" : ""}
             aria-pressed={tab === key}
           >
             {label}

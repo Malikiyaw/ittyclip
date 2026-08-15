@@ -63,49 +63,49 @@ export function Preview() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#05060c] p-4">
-        <div
-          className="grid-bg absolute inset-0 opacity-50"
-          aria-hidden
-        />
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black p-6">
+        <div className="studio-grid" aria-hidden />
+        <span className="absolute top-4 left-5 z-10 font-mono text-[10px] tracking-[0.3em] text-white/30 uppercase">
+          preview
+        </span>
         <div className="relative h-full max-h-full" style={{ aspectRatio: ratio }}>
           <video
             ref={videoRef}
             src={media.url}
-            className="h-full w-full rounded-xl bg-black object-cover shadow-[0_30px_80px_rgba(0,0,0,0.7)] ring-1 ring-white/10"
+            className="h-full w-full rounded-2xl bg-black object-cover shadow-[0_40px_100px_rgba(0,0,0,0.85)] ring-1 ring-white/15"
             playsInline
             muted
           />
-          <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-white/10" aria-hidden />
+          <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-white/10" aria-hidden />
           <CaptionOverlay />
           {isPlaying && (
-            <div className="pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5">
-              <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-hot" />
-              <span className="font-mono text-[10px] tracking-widest text-white">CLIPPING</span>
+            <div className="pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 backdrop-blur">
+              <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-white" />
+              <span className="font-mono text-[10px] tracking-[0.25em] text-white/90 uppercase">CLIPPING</span>
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex h-16 shrink-0 items-center gap-4 border-t border-line bg-panel/60 px-5">
+      <div className="flex h-16 shrink-0 items-center gap-4 border-t border-white/10 bg-black px-5">
         <button
           onClick={() => setPlaying(!isPlaying)}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand2 shadow-[0_0_20px_rgba(124,92,255,0.5)] transition-transform hover:scale-105"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.25)] transition-transform hover:scale-105"
           aria-label={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? (
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-              <rect x="2" y="2" width="4" height="10" rx="1" fill="white" />
-              <rect x="8" y="2" width="4" height="10" rx="1" fill="white" />
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
+              <rect x="2" y="2" width="4" height="10" rx="1" fill="black" />
+              <rect x="8" y="2" width="4" height="10" rx="1" fill="black" />
             </svg>
           ) : (
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-              <path d="M3 2.5 L12 7 L3 11.5 Z" fill="white" />
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden>
+              <path d="M3 2.5 L12 7 L3 11.5 Z" fill="black" />
             </svg>
           )}
         </button>
 
-        <div className="flex items-center gap-1.5">
+        <div className="s-seg">
           {ASPECT_BUTTONS.map((b) => (
             <button
               key={b.key}
@@ -113,9 +113,7 @@ export function Preview() {
                 useStudio.getState().setAspect(b.key);
                 useStudio.getState().showToast(`${b.key} — ${ASPECTS[b.key].hint}`);
               }}
-              className={`rounded-md px-2.5 py-1 font-mono text-[11px] transition-colors ${
-                aspect === b.key ? "bg-brand/20 text-brand2" : "text-mute hover:text-fg"
-              }`}
+              className={aspect === b.key ? "active" : ""}
               aria-pressed={aspect === b.key}
             >
               {b.label}
@@ -123,7 +121,7 @@ export function Preview() {
           ))}
         </div>
 
-        <span className="font-mono text-xs text-mute">
+        <span className="font-mono text-xs whitespace-nowrap text-white/60 tabular-nums">
           {fmtClock(playhead)} / {fmtClock(duration)}
         </span>
 

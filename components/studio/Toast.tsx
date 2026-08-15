@@ -7,7 +7,7 @@ export function Toast() {
   if (!toast) return null;
   return (
     <div className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2">
-      <div className="glass-deep rounded-full px-5 py-2.5 text-sm text-fg shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+      <div className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black shadow-[0_16px_50px_rgba(0,0,0,0.7)]">
         {toast}
       </div>
     </div>

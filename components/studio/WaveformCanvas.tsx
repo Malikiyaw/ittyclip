@@ -40,7 +40,7 @@ export function WaveformCanvas({
       const v = Math.max(0.02, peaks[i]);
       const bh = Math.max(1, v * (h - 8));
       const x = i * barW;
-      ctx.fillStyle = i % 7 === 3 ? "rgba(124,92,255,0.55)" : "rgba(34,211,238,0.35)";
+      ctx.fillStyle = i % 7 === 3 ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.22)";
       ctx.fillRect(x, mid - bh / 2, Math.max(1, barW - 1), bh);
     }
   }, [peaks, bars, contentWidth]);

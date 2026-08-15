@@ -21,8 +21,8 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (!checked || !hydrated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-ink">
-        <p className="font-mono text-xs tracking-widest text-mute uppercase">
+      <div className="flex h-screen items-center justify-center bg-black">
+        <p className="font-mono text-xs tracking-widest text-white/60 uppercase">
           loading studio…
         </p>
       </div>

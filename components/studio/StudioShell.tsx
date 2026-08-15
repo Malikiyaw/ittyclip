@@ -17,7 +17,7 @@ export function StudioShell() {
   useKeyboard();
 
   return (
-    <div className="flex h-screen flex-col bg-ink">
+    <div className="studio flex h-screen flex-col">
       <TopBar onExport={() => setExportOpen(true)} />
       {media ? (
         <div className="flex min-h-0 flex-1">
