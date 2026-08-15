@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useStudio } from "@/store/studio";
-import { classifyLink } from "@/lib/linkDetect";
 import { importFromLink } from "@/lib/importLink";
 
 export function UploadZone() {
@@ -17,6 +16,7 @@ export function UploadZone() {
   const [fileSizeWarn, setFileSizeWarn] = useState(false);
   const [url, setUrl] = useState("");
   const [importing, setImporting] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
   const busy = analyzing || importing;
@@ -24,19 +24,18 @@ export function UploadZone() {
   const handleImport = async () => {
     const raw = url.trim();
     if (!raw || busy) return;
-    if (classifyLink(raw) === "platform") {
-      setImportError(
-        "Platform pages (YouTube · TikTok · Reels) aren't directly downloadable — paste a direct .mp4/.webm link instead."
-      );
-      return;
-    }
     setImportError(null);
     setImportProgress(0);
+    setResolving(true);
     setImporting(true);
     try {
-      await importFromLink(raw, (mb) => setImportProgress(mb));
+      await importFromLink(raw, (mb) => {
+        setResolving(false);
+        setImportProgress(mb);
+      });
       setUrl("");
     } catch (err) {
+      setResolving(false);
       setImportError(err instanceof Error ? err.message : "Import failed — try a different link.");
     } finally {
       setImporting(false);
@@ -140,7 +139,7 @@ export function UploadZone() {
             <h3 className="s-display text-sm uppercase tracking-[0.2em] text-white/80">
               Or import from a link
             </h3>
-            <span className="s-chip">direct .mp4 · webm · mov</span>
+            <span className="s-chip">YouTube · TikTok · Reels · Shorts</span>
           </div>
           <form
             className="flex items-center gap-2"
@@ -156,7 +155,7 @@ export function UploadZone() {
                 setUrl(e.target.value);
                 if (importError) setImportError(null);
               }}
-              placeholder="https://example.com/video.mp4"
+              placeholder="Paste a link — YouTube, TikTok, Reels, or direct .mp4"
               aria-label="Video link"
               disabled={busy}
               className="h-11 flex-1 rounded-xl border border-white/15 bg-black/40 px-4 font-mono text-xs text-white placeholder-white/30 outline-none transition-colors focus:border-white/60"
@@ -166,7 +165,7 @@ export function UploadZone() {
               disabled={busy || !url.trim()}
               className="h-11 rounded-xl bg-white px-5 text-xs font-semibold tracking-wide text-black transition-opacity hover:opacity-85 disabled:opacity-40"
             >
-              {importing ? "Downloading…" : "Import"}
+              {importing ? "Importing…" : "Import"}
             </button>
           </form>
 
@@ -174,9 +173,13 @@ export function UploadZone() {
             <div className="mt-4">
               <div className="mb-1.5 flex items-center justify-between">
                 <p className="font-mono text-[11px] text-white/70">
-                  Downloading video · {Math.round(importProgress)} MB
+                  {resolving
+                    ? "Resolving link…"
+                    : `Downloading video · ${Math.round(importProgress)} MB`}
                 </p>
-                <p className="font-mono text-[11px] text-white/40">importing</p>
+                <p className="font-mono text-[11px] text-white/40">
+                  {resolving ? "resolving" : "downloading"}
+                </p>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full animate-pulse rounded-full bg-white" />

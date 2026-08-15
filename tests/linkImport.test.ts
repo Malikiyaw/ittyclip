@@ -11,9 +11,13 @@ describe("classifyLink", () => {
   it("classifies platform pages", () => {
     expect(classifyLink("https://www.youtube.com/watch?v=abc123")).toBe("platform");
     expect(classifyLink("https://youtu.be/abc123")).toBe("platform");
+    expect(classifyLink("https://www.youtube.com/shorts/abc123")).toBe("platform");
     expect(classifyLink("https://www.tiktok.com/@user/video/123456")).toBe("platform");
+    expect(classifyLink("https://vm.tiktok.com/ZMabcdef/")).toBe("platform");
     expect(classifyLink("https://www.instagram.com/reel/xyz/")).toBe("platform");
     expect(classifyLink("https://vimeo.com/12345")).toBe("platform");
+    expect(classifyLink("https://www.twitch.tv/videos/123456789")).toBe("platform");
+    expect(classifyLink("https://x.com/user/status/123")).toBe("platform");
   });
 
   it("returns unknown for other urls", () => {

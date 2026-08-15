@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
+import { classifyLink } from "@/lib/linkDetect";
+import { resolvePlatformUrl } from "@/lib/server/ytdlp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,10 +43,26 @@ export async function GET(request: Request) {
   if (!rawUrl) return NextResponse.json({ error: "Missing ?url= parameter." }, { status: 400 });
 
   let upstreamUrl: URL;
-  try {
-    upstreamUrl = new URL(rawUrl);
-  } catch {
-    return NextResponse.json({ error: "That doesn't look like a valid URL." }, { status: 400 });
+  let expectedExt: string | null = null;
+  let resolvedTitle: string | null = null;
+
+  if (classifyLink(rawUrl) === "platform") {
+    let resolved;
+    try {
+      resolved = await resolvePlatformUrl(rawUrl);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Couldn't resolve that platform link.";
+      return NextResponse.json({ error: message }, { status: 422 });
+    }
+    upstreamUrl = new URL(resolved.url);
+    expectedExt = resolved.ext;
+    resolvedTitle = resolved.title;
+  } else {
+    try {
+      upstreamUrl = new URL(rawUrl);
+    } catch {
+      return NextResponse.json({ error: "That doesn't look like a valid URL." }, { status: 400 });
+    }
   }
   if (upstreamUrl.protocol !== "http:" && upstreamUrl.protocol !== "https:") {
     return NextResponse.json({ error: "Only http(s) links are supported." }, { status: 400 });
@@ -87,7 +105,8 @@ export async function GET(request: Request) {
   const contentType = res.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
   const isVideo =
     contentType.startsWith("video/") ||
-    (contentType === "application/octet-stream" && VIDEO_EXT.test(upstreamUrl.pathname));
+    (contentType === "application/octet-stream" &&
+      (expectedExt ? VIDEO_EXT.test("." + expectedExt) : VIDEO_EXT.test(upstreamUrl.pathname)));
   if (!isVideo) {
     await res.body.cancel().catch(() => undefined);
     return NextResponse.json(
@@ -128,8 +147,14 @@ export async function GET(request: Request) {
     },
   });
 
-  const dispName =
-    safeName(decodeURIComponent(upstreamUrl.pathname.split("/").pop() || "")) || "video-imported.mp4";
+  let dispName: string;
+  if (resolvedTitle) {
+    dispName = safeName(resolvedTitle);
+    if (!/\.[a-z0-9]{2,5}$/i.test(dispName)) dispName += "." + (expectedExt || "mp4");
+  } else {
+    dispName =
+      safeName(decodeURIComponent(upstreamUrl.pathname.split("/").pop() || "")) || "video-imported.mp4";
+  }
 
   const headers = new Headers();
   headers.set("Content-Type", contentType || "video/mp4");
