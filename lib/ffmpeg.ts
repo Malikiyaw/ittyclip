@@ -109,7 +109,15 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   finally { instance.off("log", onLog); }
 
   const data = await instance.readFile(job.format === "mp4" ? "out.mp4" : "out.webm");
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+  // @ffmpeg/ffmpeg types model readFile as a union that also includes a string.
+  // FFmpeg output files are binary, so narrow the union explicitly before
+  // constructing the Blob. This keeps the build type-safe without changing the
+  // runtime behavior for either ffmpeg core version.
+  let bytes: Uint8Array;
+  if (typeof data === "string") {
+    throw new Error("FFmpeg returned text instead of a binary output file.");
+  }
+  bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const blob = new Blob([bytes], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
   job.onProgress(1);
   return { blob, name: `${job.name || "ittyclip-export"}.${job.format}` };
