@@ -7,6 +7,7 @@ export interface Candidate {
 }
 
 const SNAP_RADIUS = 1.5;
+const SILENCE_SNAP_RADIUS = 0.9;
 
 /**
  * Nearest transcript word boundary to `t` within `radius` seconds.
@@ -39,10 +40,20 @@ export function wordBoundaries(words: CaptionLine[]): number[] {
   return Array.from(set).sort((a, b) => a - b);
 }
 
-/** Nearest silence edge (start or end of a silence segment) to `t`. */
-export function nearestSilenceEdge(t: number, silence: { start: number; end: number }[]): number {
+/**
+ * Nearest silence edge to `t`, but only when the edge is genuinely close.
+ * The previous implementation had no radius, so every candidate was snapped
+ * to the globally nearest silence boundary. On videos with sparse silence
+ * this could move clip boundaries by many seconds and distort the target
+ * window.
+ */
+export function nearestSilenceEdge(
+  t: number,
+  silence: { start: number; end: number }[],
+  radius = SILENCE_SNAP_RADIUS
+): number {
   let best = t;
-  let bestDist = Infinity;
+  let bestDist = radius + Number.EPSILON;
   for (const s of silence) {
     for (const b of [s.start, s.end]) {
       const d = Math.abs(b - t);
@@ -59,7 +70,7 @@ export function nearestSilenceEdge(t: number, silence: { start: number; end: num
  * Generates candidate clip windows for a target length.
  *
  * Windows slide across the timeline with `step` seconds. Each window is then
- * snapped to the nearest silence edge (and word boundary when a transcript
+ * snapped to a nearby silence edge (and word boundary when a transcript
  * exists) so cuts never land mid-word. The final window length is allowed to
  * drift within `slack` of the target so snaps can still take effect.
  */
