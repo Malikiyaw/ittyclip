@@ -23,9 +23,8 @@ export function StudioShell() {
       <TopBar onExport={() => setExportOpen(true)} />
       {media ? (
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
-          {/* Desktop: persistent tools sidebar. Mobile: compact bottom-sheet, hidden by default
-              so the user can actually see and watch the video. */}
           <aside
+            id="mobile-studio-tools"
             className={`studio-media-sidebar order-3 min-h-0 min-w-0 shrink-0 overflow-x-hidden overflow-y-auto border-white/10 bg-[#07080d] md:order-1 md:h-full md:w-[min(380px,34vw)] md:border-r ${
               mobilePanelOpen
                 ? "absolute inset-x-0 bottom-0 z-50 max-h-[68dvh] w-full rounded-t-2xl border-t shadow-[0_-24px_80px_rgba(0,0,0,0.75)]"
@@ -55,7 +54,6 @@ export function StudioShell() {
             </div>
           </div>
 
-          {/* Mobile-only controls. Keep these outside the preview so they never shrink the video. */}
           <div className="absolute bottom-[4.25rem] left-1/2 z-40 flex -translate-x-1/2 md:hidden">
             <button
               type="button"
