@@ -1,4 +1,5 @@
 import type { AnalysisResult, ClipLength, Moment } from "@/lib/types";
+import { runHighlightAnalysis } from "@/lib/analysis/engine";
 import type { RankedHighlight } from "@/lib/analysis/types";
 import {
   ANALYSIS_STAGES,
@@ -49,12 +50,17 @@ export function decodeAudioFile(file: Blob, signal?: AbortSignal): Promise<Audio
   return decodeAudio(file, signal);
 }
 
-/** Main-thread fallback for the ingest pipeline (used when no worker is available). */
+/**
+ * Main-thread fallback for the ingest pipeline (used when no worker is
+ * available). Every heavy step yields to the event loop so the UI never
+ * freezes; only `decodeAudioData` itself is a single blocking call.
+ */
 export async function analyzeFileMain(
   file: File,
   onProgress?: (p: number, stage?: string) => void,
   signal?: AbortSignal
 ): Promise<AnalysisResult> {
+  const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
   const emit = (idx: number) => {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const [p, stage] = ANALYSIS_STAGES[Math.min(idx, ANALYSIS_STAGES.length - 1)];
@@ -62,19 +68,28 @@ export async function analyzeFileMain(
   };
 
   emit(0);
+  await yieldToMain();
   const buffer = await decodeAudio(file, signal);
   emit(1);
-  const env = computeEnvelope(buffer);
+  await yieldToMain();
+  const env = await computeEnvelope(buffer, () => {}, 4096);
   emit(2);
   const duration = buffer.duration;
+  await yieldToMain();
   const silence = detectSilence(env, duration, HOP_MS);
+  await yieldToMain();
   const speech = detectSpeech(env, duration, HOP_MS);
+  await yieldToMain();
   emit(3);
   const energy = detectEnergyPeaks(env, HOP_MS, duration);
+  await yieldToMain();
   emit(4);
   const moments = detectMoments(env, duration, HOP_MS);
+  await yieldToMain();
   emit(5);
+  await yieldToMain();
   emit(6);
+  await yieldToMain();
   emit(7);
   return { duration, envelope: env, speech, energy, moments, silence, hopSec: HOP_MS / 1000 };
 }
@@ -180,9 +195,10 @@ function analyzeWithWorker(
 
 /**
  * Full ingest pipeline: decode + signals + local highlight ranking.
- * Runs on a Web Worker so the main thread NEVER blocks — if the worker is
- * unavailable, this returns `null` instead of degrading to a blocking
- * main-thread decode (which would freeze the studio on large videos).
+ * Primary path is a Web Worker so the main thread never blocks. If the
+ * worker is unavailable, it falls back to a time-sliced main-thread
+ * implementation that yields to the event loop between every heavy step —
+ * analysis always runs, and the studio stays responsive either way.
  */
 export async function analyzeWithHighlights(
   file: File,
@@ -191,17 +207,28 @@ export async function analyzeWithHighlights(
   onProgress?: (p: number, stage?: string) => void,
   signal?: AbortSignal
 ): Promise<AnalyzePayload | null> {
-  if (typeof Worker === "undefined") return null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") throw err;
-      console.warn(`[ittyclip] analysis worker failed (attempt ${attempt + 1} of 2):`, err);
+  if (typeof Worker !== "undefined") {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") throw err;
+        console.warn(`[ittyclip] analysis worker failed (attempt ${attempt + 1} of 2):`, err);
+      }
     }
+    console.warn("[ittyclip] analysis worker unavailable — using chunked main-thread analysis.");
   }
-  console.error("[ittyclip] analysis worker unavailable — proceeding without local analysis.");
-  return null;
+  const analysis = await analyzeFileMain(file, onProgress, signal);
+  const highlights = runHighlightAnalysis({
+    envelope: analysis.envelope,
+    hopSec: analysis.hopSec,
+    duration: analysis.duration,
+    silence: analysis.silence,
+    transcript: null,
+    clipLength,
+    maxResults,
+  });
+  return { analysis, highlights };
 }
 
 /**

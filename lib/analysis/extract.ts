@@ -11,15 +11,25 @@ export interface AnalysisProgress {
 /**
  * Envelope of RMS energy at HOP_MS resolution, normalized per channel.
  * `onProgress` (0..1) is reported during the scan so the caller can paint
- * a smooth progress bar even for very long videos.
+ * a smooth progress bar even for very long videos. When `yieldEvery > 0`
+ * the loop hands control back to the event loop every N channels-so-far so
+ * the main thread never blocks (used by the worker-less fallback path).
  */
-export function computeEnvelope(buffer: AudioBuffer, onProgress?: (f: number) => void): Float32Array {
+export async function computeEnvelope(
+  buffer: AudioBuffer,
+  onProgress?: (f: number) => void,
+  yieldEvery = 0
+): Promise<Float32Array> {
   const ch = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
   const hop = Math.max(1, Math.round((sampleRate * HOP_MS) / 1000));
   const total = Math.floor(buffer.length / hop);
   const env = new Float32Array(total);
   const reportEvery = Math.max(1, Math.floor(total / 60));
+  const yieldFn =
+    yieldEvery > 0
+      ? () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+      : () => Promise.resolve();
   for (let c = 0; c < ch; c++) {
     const data = buffer.getChannelData(c);
     for (let i = 0; i < total; i++) {
@@ -32,6 +42,7 @@ export function computeEnvelope(buffer: AudioBuffer, onProgress?: (f: number) =>
       }
       env[i] += sum / Math.max(1, (end - off) / 8);
       if (c === ch - 1 && onProgress && i % reportEvery === 0) onProgress(i / total);
+      if (yieldEvery > 0 && i % yieldEvery === yieldEvery - 1) await yieldFn();
     }
   }
   for (let i = 0; i < total; i++) env[i] = Math.sqrt(env[i] / ch);

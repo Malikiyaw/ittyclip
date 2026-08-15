@@ -305,7 +305,7 @@ export const useStudio = create<StudioState>()((set, get) => ({
       ...(noLocalAnalysis
         ? {
             toast:
-              "Analysis engine unavailable in this browser — the studio is ready, but auto-highlights are off.",
+              "Couldn't decode this video's audio — auto-highlights are off, but the studio is ready for manual editing.",
           }
         : {}),
     });
@@ -377,16 +377,17 @@ export const useStudio = create<StudioState>()((set, get) => ({
       return;
     }
     pushHistory(s);
+    let added = 0;
     set((st) => {
       const existing = new Set(st.clips.map((c) => c.start.toFixed(3)));
       const fresh = st.pendingHighlights
         .filter((m) => !existing.has(m.start.toFixed(3)))
         .map((m, i) => ({ ...m, id: uid(), label: `Highlight ${m.rank ?? i + 1}` }));
+      added = fresh.length;
       const clips = [...st.clips, ...fresh].sort((a, b) => a.start - b.start);
       return { clips, activeClipId: fresh[0]?.id ?? st.activeClipId };
     });
-    const added = get().clips.length;
-    set({ toast: `Generated ${get().pendingHighlights.length} clips — ${added} in timeline` });
+    set({ toast: `Added ${added} highlight${added === 1 ? "" : "s"} to the timeline` });
   },
   clearTimeline: () => {
     pushHistory(get());

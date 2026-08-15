@@ -38,13 +38,17 @@ export function Preview() {
     if (!video) return;
     if (isPlaying) {
       video.play().catch(() => {});
+      let frame = 0;
       const loop = () => {
         rafRef.current = requestAnimationFrame(loop);
         if (video.ended || video.currentTime >= (useStudio.getState().media?.duration ?? 0)) {
           setPlaying(false);
           return;
         }
-        tick(video.currentTime);
+        // Commit the playhead at ~30fps instead of every frame to cut
+        // re-render churn while the preview plays.
+        if (frame % 2 === 0) tick(video.currentTime);
+        frame++;
       };
       rafRef.current = requestAnimationFrame(loop);
     } else {
@@ -57,8 +61,14 @@ export function Preview() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !media) return;
-    video.currentTime = Math.min(playhead, Math.max(0, (media.duration || 0) - 0.01));
-  }, [playhead, media]);
+    // During playback the video advances itself; seeking here every frame
+    // would fight the playback and cause stutter. Only sync the seek when
+    // the user scrubs or the clip moves while paused.
+    if (isPlaying) return;
+    if (Math.abs(video.currentTime - playhead) > 0.03) {
+      video.currentTime = Math.min(playhead, Math.max(0, (media.duration || 0) - 0.01));
+    }
+  }, [playhead, media, isPlaying]);
 
   if (!media) return null;
   const duration = media.duration || 0;

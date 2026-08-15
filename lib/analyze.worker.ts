@@ -99,7 +99,7 @@ async function analyze(request: AnalyzeRequest): Promise<void> {
     if (cancelled.has(id)) throw new DOMException("Aborted", "AbortError");
     const buffer = await decodeAudioData(arrayBuffer);
     emit(1);
-    const env = computeEnvelope(buffer, (fraction) => {
+    const env = await computeEnvelope(buffer, (fraction) => {
       if (cancelled.has(id)) throw new DOMException("Aborted", "AbortError");
       const [start, stage] = ANALYSIS_STAGES[1];
       const [end] = ANALYSIS_STAGES[2];
