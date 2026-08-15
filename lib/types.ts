@@ -56,12 +56,45 @@ export const CAPTION_STYLES: { key: CaptionStyleKey; label: string }[] = [
   { key: "bold", label: "Bold Block" },
 ];
 
+export type CaptionAnimation = "none" | "pop" | "fade" | "slide-up" | "word-pop";
+
+export interface CaptionSettings {
+  /** "display" = Archivo Black (matches burned export), "sans" = Inter. */
+  font: "display" | "sans";
+  /** Font size multiplier. */
+  size: number;
+  weight: "normal" | "semibold" | "bold" | "black";
+  textColor: string;
+  highlightColor: string;
+  position: "bottom" | "middle" | "top";
+  /** Max text width as a fraction of the preview width. */
+  maxWidth: number;
+  stroke: boolean;
+  shadow: boolean;
+  background: "none" | "solid" | "soft";
+  backgroundOpacity: number;
+  lineSpacing: number;
+  animation: CaptionAnimation;
+  uppercase: boolean;
+}
+
 export interface AnalysisResult {
   duration: number;
   envelope: Float32Array;
+  /** 50ms hop between envelope samples, seconds. */
+  hopSec: number;
+  /** Speech segments (inverse of silence). */
+  speech: { start: number; end: number }[];
+  /** Normalized energy peaks for AI/analysis consumption. */
+  energy: { time: number; value: number }[];
+  /** Legacy top-6 moment list (kept for compatibility). */
   moments: Moment[];
   silence: { start: number; end: number }[];
 }
+
+export type ClipLength = 15 | 30 | 45 | 60;
+
+export const CLIP_LENGTHS: ClipLength[] = [15, 30, 45, 60];
 
 export type ExportFormat = "mp4" | "webm";
 
@@ -73,6 +106,9 @@ export interface ExportJob {
   resolution: 720 | 1080;
   burnCaptions: boolean;
   watermark: boolean;
+  captionSettings?: CaptionSettings;
+  reframe?: import("@/lib/reframe/state").ReframeState;
+  clipName?: string;
   onProgress: (p: number) => void;
 }
 

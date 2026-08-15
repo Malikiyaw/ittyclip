@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { useStudio } from "@/store/studio";
 import { useAuth } from "@/store/auth";
 import { fmtClock } from "@/lib/types";
+import { PROJECT_EXT } from "@/lib/project";
 
 export function TopBar({ onExport }: { onExport: () => void }) {
   const router = useRouter();
@@ -13,8 +15,11 @@ export function TopBar({ onExport }: { onExport: () => void }) {
   const analyzing = useStudio((s) => s.analyzing);
   const showToast = useStudio((s) => s.showToast);
   const exportState = useStudio((s) => s.exportState);
+  const canUndo = useStudio((s) => s.undoStack.length > 0);
+  const canRedo = useStudio((s) => s.redoStack.length > 0);
   const session = useAuth((s) => s.session);
   const logout = useAuth((s) => s.logout);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const signOut = () => {
     logout();
@@ -28,10 +33,24 @@ export function TopBar({ onExport }: { onExport: () => void }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "ittyclip-project.json";
+    a.download = `ittyclip-project${PROJECT_EXT}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
     showToast("Project saved");
+  };
+
+  const loadProject = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      if (!text) {
+        showToast("Could not read that file.");
+        return;
+      }
+      useStudio.getState().loadProject(text);
+    };
+    reader.onerror = () => showToast("Could not read that file.");
+    reader.readAsText(file);
   };
 
   return (
@@ -67,11 +86,47 @@ export function TopBar({ onExport }: { onExport: () => void }) {
             {session.name || session.email}
           </span>
         )}
+        <button
+          onClick={() => useStudio.getState().undo()}
+          disabled={!canUndo}
+          className="s-btn px-2.5 py-1.5 text-[10px]"
+          aria-label="Undo (Ctrl+Z)"
+          title="Undo (Ctrl+Z)"
+        >
+          ↩
+        </button>
+        <button
+          onClick={() => useStudio.getState().redo()}
+          disabled={!canRedo}
+          className="s-btn px-2.5 py-1.5 text-[10px]"
+          aria-label="Redo (Ctrl+Shift+Z)"
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          ↪
+        </button>
         {media && (
           <>
             <button onClick={saveProject} className="s-btn">
               Save project
             </button>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="s-btn"
+              title="Load a saved .ittyclip project"
+            >
+              Load project
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".ittyclip,.json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) loadProject(f);
+                e.target.value = "";
+              }}
+            />
             <button
               onClick={onExport}
               disabled={exportState === "running" || exportState === "loading"}

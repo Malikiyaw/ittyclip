@@ -1,7 +1,9 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
-import type { CaptionLine, ExportJob } from "@/lib/types";
+import type { CaptionLine, CaptionSettings, ExportJob } from "@/lib/types";
 import { escapeDrawtext } from "@/lib/captions";
+import { buildCropExpression } from "@/lib/reframe/trajectory";
+import type { ReframeState } from "@/lib/reframe/state";
 
 const BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/esm";
 let ffmpeg: FFmpeg | null = null;
@@ -34,14 +36,35 @@ function escapeDrawtextAlpha(text: string): string {
   return escapeDrawtext(text).replace(/'/g, "\u2019");
 }
 
+const DEFAULT_CAPTION_SETTINGS: CaptionSettings = {
+  font: "display",
+  size: 1,
+  weight: "bold",
+  textColor: "#FFFFFF",
+  highlightColor: "#F7C948",
+  position: "bottom",
+  maxWidth: 0.86,
+  stroke: false,
+  shadow: true,
+  background: "none",
+  backgroundOpacity: 0.55,
+  lineSpacing: 1.25,
+  animation: "word-pop",
+  uppercase: false,
+};
+
 function buildDrawtext(
   lines: CaptionLine[],
   segmentOffsets: number[],
-  total: number,
   res: number,
-  aspect: number
+  aspect: number,
+  settings: CaptionSettings
 ): string[] {
   const filters: string[] = [];
+  const color = settings.textColor.replace("#", "0x");
+  const yFrac = settings.position === "top" ? 0.12 : settings.position === "middle" ? 0.45 : 0.74;
+  const y = Math.round(res * aspect * yFrac);
+
   for (const line of lines) {
     for (let i = 0; i < segmentOffsets.length - 1; i++) {
       const segStart = segmentOffsets[i];
@@ -51,18 +74,18 @@ function buildDrawtext(
       if (overlapEnd <= overlapStart) continue;
       const localStart = overlapStart - segStart;
       const localEnd = overlapEnd - segStart;
-      const fontsize = Math.round(res * 0.052);
+      const fontsize = Math.round(res * 0.052 * settings.size);
       const boxH = Math.round(fontsize * 0.55);
-      const y = Math.round(res * aspect * 0.74);
+      const hasBox = settings.background !== "none";
+      const boxAlpha = hasBox ? settings.backgroundOpacity : 0;
+      const text = settings.uppercase ? line.text.toUpperCase() : line.text;
       filters.push(
         `drawtext=fontfile=/font.ttf:text='${escapeDrawtextAlpha(
-          line.text
-        )}':fontsize=${fontsize}:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=${boxH}:x=(w-text_w)/2:y=${y}:enable='between(t,${localStart.toFixed(2)},${localEnd.toFixed(2)})'`
+          text
+        )}':fontsize=${fontsize}:fontcolor=${color}:box=${hasBox ? 1 : 0}:boxcolor=black@${boxAlpha.toFixed(2)}:boxborderw=${boxH}:x=(w-text_w)/2:y=${y}:enable='between(t,${localStart.toFixed(2)},${localEnd.toFixed(2)})'`
       );
     }
   }
-  if (filters.length === 0) return [];
-  void total;
   return filters;
 }
 
@@ -86,7 +109,8 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
 
   let cropW = vw;
   let cropH = vh;
-  if (aspect > srcAspect) {
+  // Narrower target aspect → crop width; wider target → crop height.
+  if (aspect < srcAspect) {
     cropW = Math.round(vh * aspect);
   } else {
     cropH = Math.round(vw / aspect);
@@ -111,11 +135,21 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   const concat = `${concatIn}concat=n=${job.segments.length}:v=1:a=1[vc][ca]`;
 
   const chain: string[] = ["[vc]"];
-  chain.push(`crop=${cropW}:${cropH}:((iw-${cropW})/2):((ih-${cropH})/2)`);
+
+  // Reframe-aware crop: tracked subject path or manual center/offset crop.
+  const reframeCrop = job.reframe
+    ? buildCropExpression(job.reframe, aspect, vw, vh, total)
+    : null;
+  if (reframeCrop) {
+    chain.push(reframeCrop);
+  } else {
+    chain.push(`crop=${cropW}:${cropH}:((iw-${cropW})/2):((ih-${cropH})/2)`);
+  }
   chain.push(`scale=${targetW}:${targetH}:flags=lanczos`);
 
+  const captionSettings = job.captionSettings ?? DEFAULT_CAPTION_SETTINGS;
   const captionFilters = job.burnCaptions
-    ? buildDrawtext(job.captions, offsets, total, job.resolution, aspect)
+    ? buildDrawtext(job.captions, offsets, job.resolution, aspect, captionSettings)
     : [];
   for (const f of captionFilters) chain.push(f);
 
@@ -219,5 +253,11 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   safe.set(raw);
   const blob = new Blob([safe], { type: job.format === "mp4" ? "video/mp4" : "video/webm" });
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-  return { blob, name: `ittyclip-${stamp}.${job.format}` };
+  const base = job.clipName ? sanitizeName(job.clipName) : `ittyclip-${stamp}`;
+  return { blob, name: `${base}.${job.format}` };
+}
+
+function sanitizeName(name: string): string {
+  const clean = name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
+  return clean || "ittyclip";
 }

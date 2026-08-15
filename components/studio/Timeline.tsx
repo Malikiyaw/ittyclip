@@ -55,6 +55,8 @@ export function Timeline() {
     e.stopPropagation();
     const clip = stateRef.current.clips.find((c) => c.id === clipId);
     if (!clip) return;
+    // One history entry per drag gesture — live updates never pollute history.
+    useStudio.getState().commitHistory();
     dragRef.current = { mode, clipId, startX: e.clientX, origStart: clip.start, origEnd: clip.end };
     useStudio.getState().setActiveClip(clipId);
   };

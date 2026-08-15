@@ -13,6 +13,7 @@ import { Toast } from "@/components/studio/Toast";
 
 export function StudioShell() {
   const media = useStudio((s) => s.media);
+  const pendingProject = useStudio((s) => s.pendingProject);
   const [exportOpen, setExportOpen] = useState(false);
   useKeyboard();
 
@@ -28,7 +29,19 @@ export function StudioShell() {
           </div>
         </div>
       ) : (
-        <UploadZone />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {pendingProject && (
+            <div className="z-20 flex items-center gap-3 border-b border-white/15 bg-white/[0.06] px-5 py-2.5 backdrop-blur">
+              <span className="text-sm" aria-hidden>📂</span>
+              <p className="text-[11px] text-white/80">
+                <span className="font-semibold text-white">{pendingProject.project.name}</span> loaded —
+                drop the original video ({pendingProject.media?.name ?? "unknown file"}) to restore your
+                clips, captions, and settings.
+              </p>
+            </div>
+          )}
+          <UploadZone />
+        </div>
       )}
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
       <Toast />

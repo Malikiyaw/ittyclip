@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useStudio } from "@/store/studio";
+import { PROJECT_EXT } from "@/lib/project";
 
 export function useKeyboard() {
   useEffect(() => {
@@ -32,11 +33,17 @@ export function useKeyboard() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "ittyclip-project.json";
+        a.download = `ittyclip-project${PROJECT_EXT}`;
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         s.showToast("Project saved");
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        s.redo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y" && !e.shiftKey) {
+        e.preventDefault();
+        s.redo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
         s.undo();
       }

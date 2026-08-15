@@ -16,6 +16,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const exportResultUrl = useStudio((s) => s.exportResultUrl);
   const setExportState = useStudio((s) => s.setExportState);
   const showToast = useStudio((s) => s.showToast);
+  const reframe = useStudio((s) => s.reframe);
 
   const [format, setFormat] = useState<ExportFormat>("mp4");
   const [resolution, setResolution] = useState<720 | 1080>(1080);
@@ -49,13 +50,17 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       showToast("Upload a video first");
       return;
     }
-    const segments =
+    const targetClips =
       s.clips.length > 0
         ? (scope === "active"
             ? s.clips.filter((c) => c.id === s.activeClipId)
             : s.clips
           ).map((c) => ({ start: c.start, end: c.end }))
         : [{ start: 0, end: s.media.duration }];
+    const clipName =
+      targetClips.length === 1 && s.activeClipId
+        ? s.clips.find((c) => c.id === s.activeClipId)?.label
+        : undefined;
 
     s.setExportState("loading", 0.02, null);
     try {
@@ -66,15 +71,19 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         );
       }
       const { blob, name } = await exportVideo(source, {
-        segments,
+        segments: targetClips,
         captions: burn ? s.captions : [],
         aspect: s.aspect,
         format,
         resolution,
         burnCaptions: burn,
         watermark,
+        captionSettings: s.captionSettings,
+        reframe: s.reframe,
+        clipName,
         onProgress: (p) => s.setExportState("running", p, null),
       });
+      if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl);
       const url = URL.createObjectURL(blob);
       s.setExportState("done", 1, url);
       setDoneName(name);
@@ -268,6 +277,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
             <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-black/[0.03] px-4 py-3">
               <span className="font-mono text-[10px] text-black/50">Aspect</span>
               <span className="font-mono text-xs font-semibold text-black">{aspect}</span>
+              {reframe.enabled && (
+                <span className="font-mono text-[10px] text-black/60">
+                  · {reframe.mode === "tracked" ? "tracked auto-reframe" : "center reframe"}
+                </span>
+              )}
               <span className="ml-auto font-mono text-[10px] text-black/40">burned at {resolution}p</span>
             </div>
 

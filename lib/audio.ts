@@ -1,13 +1,23 @@
 import type { AnalysisResult, Moment } from "@/lib/types";
 import { uid } from "@/lib/types";
 
-const HOP_MS = 50;
+export const HOP_MS = 50;
 
-function decodeAudio(file: Blob): Promise<AudioBuffer> {
+export interface AnalysisProgress {
+  p: number;
+  stage: string;
+}
+
+function decodeAudio(file: Blob, signal?: AbortSignal): Promise<AudioBuffer> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
     file.arrayBuffer().then((buf) => {
+      if (signal?.aborted) {
+        ctx.close().catch(() => {});
+        return reject(new DOMException("Aborted", "AbortError"));
+      }
       ctx.decodeAudioData(
         buf,
         (audio) => {
@@ -20,8 +30,8 @@ function decodeAudio(file: Blob): Promise<AudioBuffer> {
   });
 }
 
-export function decodeAudioFile(file: Blob): Promise<AudioBuffer> {
-  return decodeAudio(file);
+export function decodeAudioFile(file: Blob, signal?: AbortSignal): Promise<AudioBuffer> {
+  return decodeAudio(file, signal);
 }
 
 function computeEnvelope(buffer: AudioBuffer): Float32Array {
@@ -69,6 +79,50 @@ function detectSilence(env: Float32Array, duration: number, hop: number) {
     silence.push({ start, end: duration });
   }
   return silence;
+}
+
+/** Speech segments — the inverse of silence, with a small merge gap. */
+export function detectSpeech(env: Float32Array, duration: number, hop: number) {
+  const sorted = Array.from(env).sort((a, b) => b - a);
+  const p95 = sorted[Math.floor(sorted.length * 0.05)];
+  const floor = Math.max(0.0018, p95 * 0.14);
+  const speech: { start: number; end: number }[] = [];
+  let inSpeech = false;
+  let start = 0;
+  const MERGE_GAP = 0.6;
+  for (let i = 0; i < env.length; i++) {
+    const loud = env[i] >= floor;
+    if (loud && !inSpeech) {
+      inSpeech = true;
+      start = Math.max(0, i * hop - 0.05);
+    } else if (!loud && inSpeech) {
+      const gap = i * hop - start;
+      if (gap > MERGE_GAP) {
+        inSpeech = false;
+        if (i * hop - start > 0.25) speech.push({ start, end: i * hop });
+        start = 0;
+      }
+    }
+  }
+  if (inSpeech && duration - start > 0.25) speech.push({ start, end: duration });
+  return speech;
+}
+
+/** Normalized energy peaks (local maxima, ~1s apart) for AI/analysis use. */
+export function detectEnergyPeaks(env: Float32Array, hop: number, duration: number) {
+  const sorted = Array.from(env).sort((a, b) => b - a);
+  const p95 = sorted[Math.floor(sorted.length * 0.05)] || 0.001;
+  const peaks: { time: number; value: number }[] = [];
+  let lastPeakAt = -1;
+  for (let i = 1; i < env.length - 1; i++) {
+    if (env[i] >= env[i - 1] && env[i] >= env[i + 1]) {
+      const t = (i * hop) / 1000;
+      if (t - lastPeakAt < 1) continue;
+      lastPeakAt = t;
+      peaks.push({ time: t, value: Math.min(1, env[i] / p95) });
+    }
+  }
+  return peaks.slice(0, 200);
 }
 
 function scoreWindow(env: Float32Array, a: number, b: number) {
@@ -130,18 +184,49 @@ export function detectMoments(
   return picked.sort((a, b) => a.start - b.start);
 }
 
-export async function analyzeFile(file: File, onProgress?: (p: number) => void): Promise<AnalysisResult> {
-  onProgress?.(0.05);
-  const buffer = await decodeAudio(file);
-  onProgress?.(0.3);
+export const ANALYSIS_STAGES = [
+  [0, "Preparing"],
+  [0.05, "Decoding audio"],
+  [0.32, "Mapping energy envelope"],
+  [0.55, "Detecting speech & silence"],
+  [0.7, "Extracting energy peaks"],
+  [0.82, "Generating highlight candidates"],
+  [0.9, "Scoring & ranking highlights"],
+  [1, "Finalizing"],
+] as const;
+
+/**
+ * Analyzes a video file into the signals the highlight engine consumes.
+ * Reports real progress through `onProgress` and can be cancelled via
+ * `signal` (throws DOMException AbortError).
+ */
+export async function analyzeFile(
+  file: File,
+  onProgress?: (p: number, stage?: string) => void,
+  signal?: AbortSignal
+): Promise<AnalysisResult> {
+  const emit = (idx: number) => {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const [p, stage] = ANALYSIS_STAGES[Math.min(idx, ANALYSIS_STAGES.length - 1)];
+    onProgress?.(p, stage);
+  };
+
+  emit(0);
+  const buffer = await decodeAudio(file, signal);
+  emit(1);
   const env = computeEnvelope(buffer);
-  onProgress?.(0.55);
+  emit(2);
   const duration = buffer.duration;
   const silence = detectSilence(env, duration, HOP_MS);
-  onProgress?.(0.75);
+  const speech = detectSpeech(env, duration, HOP_MS);
+  emit(3);
+  const energy = detectEnergyPeaks(env, HOP_MS, duration);
+  emit(4);
   const moments = detectMoments(env, duration, HOP_MS);
-  onProgress?.(1);
-  return { duration, envelope: env, moments, silence };
+  emit(5);
+  emit(6);
+  emit(7);
+  return { duration, envelope: env, speech, energy, moments, silence, hopSec: HOP_MS / 1000 };
 }
 
 export function waveformPeaks(env: Float32Array, width: number): number[] {

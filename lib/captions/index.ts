@@ -1,6 +1,21 @@
 import type { CaptionLine, Word } from "@/lib/types";
 import { uid } from "@/lib/types";
 
+export { breakCaptionLines } from "@/lib/captions/breaking";
+export {
+  CAPTION_PRESETS,
+  DEFAULT_CAPTION_SETTINGS,
+  animationClass,
+  presetFor,
+  type CaptionPresetKey,
+} from "@/lib/captions/presets";
+export {
+  CAPTION_SAFE_BOTTOM,
+  CAPTION_SAFE_TOP,
+  SAFE_ZONES,
+  type SafeZoneKey,
+} from "@/lib/captions/safezones";
+
 export function segmentTranscript(
   text: string,
   segments: { start: number; end: number }[],
@@ -70,11 +85,13 @@ export function buildSrt(lines: CaptionLine[]): string {
     .join("\n");
 }
 
+// Backslash must be escaped FIRST — later rules introduce backslashes
+// (e.g. "'" → "\'") that must not be re-escaped by the backslash rule.
 const ESCAPE_RULES: [RegExp, string][] = [
+  [/\\/g, "\\\\"],
   [/'/g, "\\'"],
   [/:/g, "\\:"],
   [/%/g, "\\%"],
-  [/\\/g, "\\\\"],
   [/,/g, "\\,"],
   [/;/g, "\\;"],
   [/\{/g, "\\{"],

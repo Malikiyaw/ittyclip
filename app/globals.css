@@ -1518,6 +1518,133 @@ body.menu-open {
   cursor: grab;
 }
 
+/* --- Caption overlay: word highlight + animations (studio only) --- */
+
+.s-caption-anim-wrap {
+  --hl: #f7c948;
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+.s-caption-word {
+  display: inline;
+}
+
+.s-caption-word-active {
+  display: inline;
+  color: var(--hl);
+}
+
+.s-caption-anim-pop {
+  animation: s-cap-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.s-caption-anim-fade {
+  animation: s-cap-fade 0.3s ease;
+}
+
+.s-caption-anim-slide {
+  animation: s-cap-slide 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.s-caption-anim-word .s-caption-word {
+  animation: s-cap-word-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.s-caption-anim-word .s-caption-word-active {
+  animation: s-cap-word-active 0.18s ease both;
+}
+
+@keyframes s-cap-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes s-cap-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes s-cap-slide {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes s-cap-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes s-cap-word-active {
+  from {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-caption-anim-wrap,
+  .s-caption-anim-wrap .s-caption-word {
+    animation: none !important;
+  }
+}
+
+/* --- Studio focus visibility (a11y) --- */
+
+.studio button:focus-visible,
+.studio input:focus-visible,
+.studio textarea:focus-visible,
+.studio a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* --- Studio responsive tweaks --- */
+
+@media (max-width: 1024px) {
+  .studio .s-seg {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .studio .s-seg button {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .studio .topbar-extra {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .s-btn,
   .s-btn-solid,

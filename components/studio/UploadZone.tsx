@@ -7,15 +7,22 @@ export function UploadZone() {
   const ingest = useStudio((s) => s.ingest);
   const analyzing = useStudio((s) => s.analyzing);
   const progress = useStudio((s) => s.analyzeProgress);
+  const stage = useStudio((s) => s.analyzeStage);
+  const cancelAnalysis = useStudio((s) => s.cancelAnalysis);
   const showToast = useStudio((s) => s.showToast);
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const [fileSizeWarn, setFileSizeWarn] = useState(false);
 
   const handleFile = (file: File | undefined | null) => {
     if (!file) return;
     if (!file.type.startsWith("video/")) {
       showToast("Drop a video file — mp4, webm, mov, mkv");
       return;
+    }
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      setFileSizeWarn(true);
+      showToast("Large file — analysis may take a while and use lots of memory");
     }
     void ingest(file);
   };
@@ -77,15 +84,17 @@ export function UploadZone() {
           {analyzing && (
             <div className="absolute inset-x-0 bottom-0">
               <div className="border-t border-white/10 bg-black/60 px-7 py-4 text-left backdrop-blur">
-                <p className="mb-2 font-mono text-[11px] text-white/70">
-                  {progress < 0.35
-                    ? "Decoding audio…"
-                    : progress < 0.6
-                      ? "Mapping energy envelope…"
-                      : progress < 0.85
-                        ? "Detecting silence & speech bursts…"
-                        : "Scoring highlight moments…"}
-                </p>
+                <div className="mb-2 flex items-center justify-between gap-4">
+                  <p className="font-mono text-[11px] text-white/70">
+                    {stage || "Analyzing…"} · {Math.round(progress * 100)}%
+                  </p>
+                  <button
+                    onClick={cancelAnalysis}
+                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] font-medium text-white/70 transition-colors hover:border-white/60 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                   <div
                     className="h-full rounded-full bg-white transition-all duration-300"
@@ -99,9 +108,9 @@ export function UploadZone() {
 
         <div className="mt-8 grid grid-cols-3 gap-4">
           {[
-            { k: "6", v: "AI highlight moments" },
-            { k: "97", v: "caption languages" },
+            { k: "10", v: "AI-ranked moments" },
             { k: "0s", v: "upload time" },
+            { k: "100%", v: "in-browser" },
           ].map((s) => (
             <div key={s.v} className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center">
               <p className="s-display text-2xl text-white">{s.k}</p>
