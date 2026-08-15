@@ -18,22 +18,28 @@ export function StudioShell() {
   useKeyboard();
 
   return (
-    <div className="studio flex h-screen flex-col">
+    <div className="studio flex h-[100dvh] min-h-0 w-full min-w-0 flex-col overflow-hidden">
       <TopBar onExport={() => setExportOpen(true)} />
       {media ? (
-        <div className="flex min-h-0 flex-1">
-          <MediaPanel onExport={() => setExportOpen(true)} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Preview />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
+          <aside className="order-2 min-h-0 min-w-0 w-full shrink-0 overflow-x-hidden overflow-y-auto border-t border-white/10 md:order-1 md:h-full md:w-[min(380px,34vw)] md:border-t-0 md:border-r">
+            <MediaPanel onExport={() => setExportOpen(true)} />
+          </aside>
+          <main className="order-1 flex min-h-[min(44dvh,420px)] min-w-0 flex-1 flex-col overflow-hidden md:order-2 md:min-h-0">
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+              <Preview />
+            </div>
+          </main>
+          <div className="order-3 min-w-0 shrink-0">
             <Timeline />
           </div>
         </div>
       ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
           {pendingProject && (
-            <div className="z-20 flex items-center gap-3 border-b border-white/15 bg-white/[0.06] px-5 py-2.5 backdrop-blur">
+            <div className="z-20 flex shrink-0 items-start gap-3 border-b border-white/15 bg-white/[0.06] px-4 py-2.5 backdrop-blur sm:px-5">
               <span className="text-sm" aria-hidden>📂</span>
-              <p className="text-[11px] text-white/80">
+              <p className="text-[11px] leading-relaxed text-white/80">
                 <span className="font-semibold text-white">{pendingProject.project.name}</span> loaded —
                 drop the original video ({pendingProject.media?.name ?? "unknown file"}) to restore your
                 clips, captions, and settings.
