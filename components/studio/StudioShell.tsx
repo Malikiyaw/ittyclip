@@ -22,12 +22,12 @@ export function StudioShell() {
       <TopBar onExport={() => setExportOpen(true)} />
       {media ? (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
-          <aside className="order-3 min-h-0 min-w-0 w-full shrink-0 overflow-x-hidden overflow-y-auto border-t border-white/10 md:order-1 md:h-full md:w-[min(380px,34vw)] md:border-t-0 md:border-r">
+          <aside className="studio-media-sidebar order-3 min-h-0 min-w-0 w-full shrink-0 overflow-x-hidden overflow-y-auto border-t border-white/10 md:order-1 md:h-full md:w-[min(380px,34vw)] md:border-t-0 md:border-r">
             <MediaPanel onExport={() => setExportOpen(true)} />
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:order-2">
-            <main className="min-h-[min(42dvh,420px)] min-w-0 flex-1 overflow-hidden md:min-h-0">
+            <main className="studio-preview min-h-[min(42dvh,420px)] min-w-0 flex-1 overflow-hidden md:min-h-0">
               <Preview />
             </main>
             <div className="min-w-0 shrink-0">
