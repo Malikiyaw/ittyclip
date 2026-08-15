@@ -29,20 +29,30 @@ function decodeAudio(file: Blob, signal?: AbortSignal): Promise<AudioBuffer> {
     if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
+    let settled = false;
+    const close = () => {
+      ctx.close().catch(() => {});
+    };
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      close();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+
     file.arrayBuffer().then((buf) => {
-      if (signal?.aborted) {
-        ctx.close().catch(() => {});
-        return reject(new DOMException("Aborted", "AbortError"));
-      }
+      if (signal?.aborted) return fail(new DOMException("Aborted", "AbortError"));
       ctx.decodeAudioData(
         buf,
         (audio) => {
-          ctx.close().catch(() => {});
+          if (settled) return;
+          settled = true;
+          close();
           resolve(audio);
         },
-        (err) => reject(new Error("Could not decode audio track: " + err?.message))
+        (err) => fail(new Error("Could not decode audio track: " + (err?.message || "unknown decode error")))
       );
-    });
+    }).catch((err) => fail(err));
   });
 }
 
@@ -130,8 +140,6 @@ function getAnalyzeWorker(): Worker {
       entry.resolve({ analysis: { ...rest, envelope }, highlights });
     } else if (msg.type === "error") {
       pending.delete(msg.id);
-      // The worker may be in a broken state (busy or failed decode) — retire it
-      // so the next attempt spins up a fresh one.
       try {
         worker?.terminate();
       } catch {
