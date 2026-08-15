@@ -22,8 +22,21 @@ export function runHighlightAnalysis(input: AnalysisInput): RankedHighlight[] {
   emit(3);
   return deduped.slice(0, input.maxResults).map((c, i) => {
     const reasons = pickReason({ breakdown: c.breakdown, transcript, start: c.start, end: c.end });
-    const signals = [c.breakdown.speech, c.breakdown.energy, c.breakdown.pacing, c.breakdown.silence, c.breakdown.quotability, c.breakdown.completeness, c.breakdown.boundary, c.breakdown.visual];
-    const m = mean(signals), spread = Math.sqrt(mean(signals.map((s) => (s - m) * (s - m))));
+    // `visual` was added after the original local scoring model. Legacy
+    // highlights and older saved projects may not contain it, so normalize
+    // the optional field to zero before calculating confidence statistics.
+    const signals = [
+      c.breakdown.speech,
+      c.breakdown.energy,
+      c.breakdown.pacing,
+      c.breakdown.silence,
+      c.breakdown.quotability,
+      c.breakdown.completeness,
+      c.breakdown.boundary,
+      c.breakdown.visual ?? 0,
+    ];
+    const m = mean(signals);
+    const spread = Math.sqrt(mean(signals.map((s) => (s - m) * (s - m))));
     const confidence = clamp(1 - spread / 34, 0.15, 1);
     const text = transcript?.filter((l) => l.end > c.start && l.start < c.end).map((l) => l.text).join(" ").replace(/\s+/g, " ").trim() || null;
     return { id: uid(), start: c.start, end: c.end, score: c.breakdown.total, label: `Highlight ${i + 1}`, rank: i + 1, reason: reasons, transcript: text ? text.slice(0, 220) : null, breakdown: c.breakdown, confidence, source: "local" as const };
