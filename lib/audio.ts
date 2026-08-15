@@ -126,19 +126,22 @@ export async function analyzeWithHighlights(file: File, clipLength: ClipLength, 
   assertSafeForLocalAnalysis(file);
   const constrained = isConstrainedDevice();
 
+  // iOS Safari is unusually aggressive about terminating tabs during WebAudio
+  // decoding. Do not start a memory-heavy local decoder there. Ingest continues
+  // normally and the video is available immediately for manual editing.
+  if (constrained) {
+    onProgress?.(1, "Ready for editing");
+    return null;
+  }
+
   if (typeof Worker !== "undefined") {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const payload = await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
-        // Visual frame decoding creates another decoder/canvas pipeline. Skip
-        // it on iOS/low-memory devices; the audio+semantic engine remains fully
-        // functional and the Studio stays stable instead of restarting.
-        if (!constrained) {
-          onProgress?.(0.82, "Reading visual events");
-          const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, signal, (p) => onProgress?.(0.82 + p * 0.10, "Reading visual events"));
-          payload.analysis.visualEvents = visualEvents;
-          payload.highlights = runHighlightAnalysis({ ...payload.analysis, transcript: null, visualEvents, clipLength, maxResults });
-        }
+        onProgress?.(0.82, "Reading visual events");
+        const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, signal, (p) => onProgress?.(0.82 + p * 0.10, "Reading visual events"));
+        payload.analysis.visualEvents = visualEvents;
+        payload.highlights = runHighlightAnalysis({ ...payload.analysis, transcript: null, visualEvents, clipLength, maxResults });
         return payload;
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") throw err;
@@ -148,11 +151,9 @@ export async function analyzeWithHighlights(file: File, clipLength: ClipLength, 
   }
 
   const analysis = await analyzeFileMain(file, onProgress, signal);
-  if (!constrained) {
-    const visualEvents = await analyzeVisualEvents(file, analysis.duration, signal);
-    analysis.visualEvents = visualEvents;
-  }
-  const highlights = runHighlightAnalysis({ ...analysis, transcript: null, visualEvents: analysis.visualEvents ?? [], clipLength, maxResults });
+  const visualEvents = await analyzeVisualEvents(file, analysis.duration, signal);
+  analysis.visualEvents = visualEvents;
+  const highlights = runHighlightAnalysis({ ...analysis, transcript: null, visualEvents, clipLength, maxResults });
   return { analysis, highlights };
 }
 
