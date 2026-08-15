@@ -51,7 +51,11 @@ export function decodeAudioFile(file: Blob, signal?: AbortSignal): Promise<Audio
 export async function analyzeFileMain(file: File, onProgress?: (p: number, stage?: string) => void, signal?: AbortSignal): Promise<AnalysisResult> {
   assertSafeForLocalAnalysis(file);
   const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-  const emit = (idx: number) => { if (signal?.aborted) throw new DOMException("Aborted", "AbortError"); onProgress?.(...(ANALYSIS_STAGES[Math.min(idx, ANALYSIS_STAGES.length - 1)])); };
+  const emit = (idx: number) => {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const stage = ANALYSIS_STAGES[Math.min(idx, ANALYSIS_STAGES.length - 1)];
+    if (stage) onProgress?.(stage[0], stage[1]);
+  };
   emit(0); await yieldToMain();
   const buffer = await decodeAudio(file, signal); emit(1); await yieldToMain();
   const env = await computeEnvelope(buffer, () => {}, 4096); emit(2); await yieldToMain();
@@ -116,9 +120,6 @@ export async function analyzeWithHighlights(file: File, clipLength: ClipLength, 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const payload = await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
-        // Visual analysis is deliberately separate from audio decoding. It
-        // samples a small number of frames and yields between seeks, avoiding
-        // another full-file memory allocation.
         onProgress?.(0.82, "Reading visual events");
         const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, signal, (p) => onProgress?.(0.82 + p * 0.10, "Reading visual events"));
         payload.analysis.visualEvents = visualEvents;
