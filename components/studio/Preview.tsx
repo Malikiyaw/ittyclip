@@ -25,6 +25,8 @@ export function Preview() {
   const aspect = useStudio((s) => s.aspect);
   const playhead = useStudio((s) => s.playhead);
   const isPlaying = useStudio((s) => s.isPlaying);
+  const activeClipId = useStudio((s) => s.activeClipId);
+  const clips = useStudio((s) => s.clips);
   const setPlayhead = useStudio((s) => s.setPlayhead);
   const setPlaying = useStudio((s) => s.setPlaying);
   const tick = useStudio((s) => s.tick);
@@ -37,6 +39,11 @@ export function Preview() {
   const rafRef = useRef(0);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [mobileControls, setMobileControls] = useState(false);
+
+  const activeClip = useMemo(
+    () => (activeClipId ? clips.find((c) => c.id === activeClipId) ?? null : null),
+    [activeClipId, clips]
+  );
 
   useEffect(() => {
     const query = window.matchMedia("(pointer: coarse)");
@@ -113,11 +120,18 @@ export function Preview() {
       let frame = 0;
       const loop = () => {
         rafRef.current = requestAnimationFrame(loop);
-        if (video.ended || video.currentTime >= (useStudio.getState().media?.duration ?? 0)) {
+        const current = video.currentTime;
+        const mediaDuration = useStudio.getState().media?.duration ?? 0;
+        const clipEnd = useStudio.getState().activeClipId
+          ? useStudio.getState().clips.find((c) => c.id === useStudio.getState().activeClipId)?.end
+          : undefined;
+        const stopAt = Number.isFinite(clipEnd) && clipEnd !== undefined ? Math.min(clipEnd, mediaDuration || clipEnd) : mediaDuration;
+        if (video.ended || (stopAt > 0 && current >= stopAt - 0.015)) {
+          if (stopAt > 0 && current >= stopAt - 0.015) tick(stopAt);
           setPlaying(false);
           return;
         }
-        if (frame % 2 === 0) tick(video.currentTime);
+        if (frame % 2 === 0) tick(current);
         frame++;
       };
       rafRef.current = requestAnimationFrame(loop);
@@ -155,11 +169,19 @@ export function Preview() {
     setPlaying(false);
   };
 
+  const togglePlayback = () => {
+    if (!isPlaying && activeClip && (playhead < activeClip.start || playhead >= activeClip.end - 0.05)) {
+      setPlayhead(activeClip.start);
+    }
+    setPlaying(!isPlaying);
+  };
+
   return (
     <div className="studio-preview flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="studio-preview-stage relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-black p-3 sm:p-6">
         <div className="studio-grid" aria-hidden />
         <span className="absolute top-4 left-5 z-10 font-mono text-[10px] tracking-[0.3em] text-white/30 uppercase">preview</span>
+        {activeClip && <span className="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-3 py-1 font-mono text-[9px] tracking-wider text-white/60 backdrop-blur">clip {fmtClock(activeClip.start)} → {fmtClock(activeClip.end)}</span>}
         {reframe.status !== "idle" && <span className="absolute top-4 right-5 z-10 rounded-full border border-white/20 bg-black/60 px-3 py-1 font-mono text-[9px] tracking-wider text-white/70 uppercase backdrop-blur">{reframe.status === "done" ? "auto-reframe" : reframe.status === "error" ? "center crop" : "tracking…"}</span>}
         <div className="relative flex h-full max-h-full min-h-0 max-w-full items-center justify-center" style={{ aspectRatio: ratio }}>
           {isVertical && <div className="pointer-events-none absolute -inset-3 z-10 rounded-[36px] border border-white/15 bg-black/50" aria-hidden />}
@@ -187,7 +209,7 @@ export function Preview() {
       </div>
 
       <div className="studio-preview-controls flex min-h-16 shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 bg-black px-3 sm:h-16 sm:gap-4 sm:px-5">
-        <button onClick={() => setPlaying(!isPlaying)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.25)] transition-transform hover:scale-105" aria-label={isPlaying ? "Pause" : "Play"}>
+        <button onClick={togglePlayback} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.25)] transition-transform hover:scale-105" aria-label={isPlaying ? "Pause" : "Play"}>
           {isPlaying ? <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden><rect x="2" y="2" width="4" height="10" rx="1" fill="black" /><rect x="8" y="2" width="4" height="10" rx="1" fill="black" /></svg> : <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden><path d="M3 2.5 L12 7 L3 11.5 Z" fill="black" /></svg>}
         </button>
         <div className="s-seg shrink-0">{ASPECT_BUTTONS.map((b) => <button key={b.key} onClick={() => { useStudio.getState().setAspect(b.key); useStudio.getState().showToast(`${b.key} — ${ASPECTS[b.key].hint}`); }} className={aspect === b.key ? "active" : ""} aria-pressed={aspect === b.key}>{b.label}</button>)}</div>
@@ -200,7 +222,7 @@ export function Preview() {
           Safe zones
         </button>
         <span className="hidden shrink-0 font-mono text-xs whitespace-nowrap text-white/60 md:inline">{fmtClock(playhead)} / {fmtClock(duration)}</span>
-        <input type="range" min={0} max={Math.max(0.1, duration)} step={0.01} value={Math.min(playhead, duration)} onChange={(e) => setPlayhead(parseFloat(e.target.value))} className="min-w-[90px] flex-1" aria-label="Seek" />
+        <input type="range" min={0} max={Math.max(0.1, duration)} step={0.01} value={Math.min(playhead, duration)} onChange={(e) => { setPlaying(false); setPlayhead(parseFloat(e.target.value)); }} className="min-w-[90px] flex-1" aria-label="Seek" />
       </div>
     </div>
   );
