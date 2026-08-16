@@ -31,603 +31,103 @@ interface HistoryEntry {
 }
 
 interface StudioState {
-  media: MediaInfo | null;
-  source: File | null;
-  analyzing: boolean;
-  analyzeProgress: number;
-  analyzeStage: string;
-  analysis: AnalysisResult | null;
-  analysisAbort: AbortController | null;
-  pendingHighlights: RankedHighlight[];
-  highlightSource: HighlightSource;
-  clipLength: ClipLength;
-  aiAnalyzing: boolean;
-  aiProgress: number;
-  aiStage: string;
-  aiFailed: boolean;
-  clips: Moment[];
-  captions: CaptionLine[];
-  captionStyle: CaptionStyleKey;
-  captionSettings: CaptionSettings;
-  showCaptions: boolean;
-  showSafeZones: boolean;
-  reframe: ReframeState;
-  aspect: AspectKey;
-  playhead: number;
-  isPlaying: boolean;
-  activeClipId: string | null;
-  zoom: number;
-  exportState: "idle" | "loading" | "running" | "done" | "error";
-  exportProgress: number;
-  exportResultUrl: string | null;
-  exportFormat: ExportFormat;
-  transcribing: boolean;
-  transcribeProgress: number;
-  transcribeStage: "idle" | "model" | "running" | "done" | "error";
-  transcribeModel: "tiny.en" | "base.en";
-  toast: string | null;
-  pendingProject: ProjectFile | null;
-  undoStack: HistoryEntry[];
-  redoStack: HistoryEntry[];
-  projectName: string;
-  dirty: boolean;
-
-  ingest: (file: File) => Promise<void>;
-  cancelAnalysis: () => void;
-  setMedia: (m: MediaInfo) => void;
-  setAnalysis: (a: AnalysisResult | null) => void;
-  setPlayhead: (t: number) => void;
-  setPlaying: (b: boolean) => void;
-  tick: (t: number) => void;
-  addClip: (m: Moment) => void;
-  removeClip: (id: string) => void;
-  updateClip: (id: string, patch: Partial<Pick<Moment, "start" | "end" | "label">>) => void;
-  setActiveClip: (id: string | null) => void;
-  addAllHighlights: () => void;
-  generateTopClips: () => void;
-  clearTimeline: () => void;
-
-  setClipLength: (len: ClipLength) => void;
-  rerankHighlights: () => void;
-  analyzeWithAI: () => Promise<void>;
-
-  setCaptions: (lines: CaptionLine[]) => void;
-  makeCaptionsFromText: (text: string) => void;
-  addCaptionAt: () => void;
-  updateCaption: (id: string, patch: Partial<CaptionLine>) => void;
-  removeCaption: (id: string) => void;
-  commitHistory: () => void;
-
-  setCaptionStyle: (s: CaptionStyleKey) => void;
-  updateCaptionSettings: (patch: Partial<CaptionSettings>) => void;
-  toggleCaptions: () => void;
-  toggleSafeZones: () => void;
-  setAspect: (a: AspectKey) => void;
-  setZoom: (z: number) => void;
-
-  updateReframe: (patch: Partial<ReframeState>) => void;
-  commitReframe: () => void;
-
-  setExportState: (
-    s: "idle" | "loading" | "running" | "done" | "error",
-    progress?: number,
-    url?: string | null
-  ) => void;
-
-  setTranscribeModel: (m: "tiny.en" | "base.en") => void;
-  transcribe: (model?: "tiny.en" | "base.en") => Promise<void>;
-
-  exportProject: () => string;
-  loadProject: (json: string) => void;
-  undo: () => void;
-  redo: () => void;
-  showToast: (msg: string) => void;
-  reset: () => void;
-  setProjectName: (name: string) => void;
-  newProject: () => void;
-  markSaved: () => void;
-  makeShort: (id: string) => void;
+  media: MediaInfo | null; source: File | null; analyzing: boolean; analyzeProgress: number; analyzeStage: string;
+  analysis: AnalysisResult | null; analysisAbort: AbortController | null; pendingHighlights: RankedHighlight[];
+  highlightSource: HighlightSource; clipLength: ClipLength; aiAnalyzing: boolean; aiProgress: number; aiStage: string; aiFailed: boolean;
+  clips: Moment[]; captions: CaptionLine[]; captionStyle: CaptionStyleKey; captionSettings: CaptionSettings; showCaptions: boolean; showSafeZones: boolean;
+  reframe: ReframeState; aspect: AspectKey; playhead: number; isPlaying: boolean; activeClipId: string | null; zoom: number;
+  exportState: "idle" | "loading" | "running" | "done" | "error"; exportProgress: number; exportResultUrl: string | null; exportFormat: ExportFormat;
+  transcribing: boolean; transcribeProgress: number; transcribeStage: "idle" | "model" | "running" | "done" | "error"; transcribeModel: "tiny.en" | "base.en";
+  toast: string | null; pendingProject: ProjectFile | null; undoStack: HistoryEntry[]; redoStack: HistoryEntry[]; projectName: string; dirty: boolean;
+  ingest: (file: File) => Promise<void>; cancelAnalysis: () => void; setMedia: (m: MediaInfo) => void; setAnalysis: (a: AnalysisResult | null) => void;
+  setPlayhead: (t: number) => void; setPlaying: (b: boolean) => void; tick: (t: number) => void; addClip: (m: Moment) => void; removeClip: (id: string) => void;
+  updateClip: (id: string, patch: Partial<Pick<Moment, "start" | "end" | "label">>) => void; setActiveClip: (id: string | null) => void;
+  addAllHighlights: () => void; generateTopClips: () => void; clearTimeline: () => void; setClipLength: (len: ClipLength) => void; rerankHighlights: () => void;
+  analyzeWithAI: () => Promise<void>; setCaptions: (lines: CaptionLine[]) => void; makeCaptionsFromText: (text: string) => void; addCaptionAt: () => void;
+  updateCaption: (id: string, patch: Partial<CaptionLine>) => void; removeCaption: (id: string) => void; commitHistory: () => void; setCaptionStyle: (s: CaptionStyleKey) => void;
+  updateCaptionSettings: (patch: Partial<CaptionSettings>) => void; toggleCaptions: () => void; toggleSafeZones: () => void; setAspect: (a: AspectKey) => void; setZoom: (z: number) => void;
+  updateReframe: (patch: Partial<ReframeState>) => void; commitReframe: () => void;
+  setExportState: (s: "idle" | "loading" | "running" | "done" | "error", progress?: number, url?: string | null) => void;
+  setTranscribeModel: (m: "tiny.en" | "base.en") => void; transcribe: (model?: "tiny.en" | "base.en") => Promise<void>;
+  exportProject: () => string; loadProject: (json: string) => void; undo: () => void; redo: () => void; showToast: (msg: string) => void; reset: () => void;
+  setProjectName: (name: string) => void; newProject: () => void; markSaved: () => void; makeShort: (id: string) => void;
 }
 
-const cloneReframe = (r: ReframeState): ReframeState => ({
-  ...r,
-  track: r.track ? r.track.map((p) => ({ ...p })) : null,
-});
-
-const snapshot = (s: StudioState): HistoryEntry => ({
-  clips: s.clips.map((c) => ({ ...c })),
-  captions: s.captions.map((c) => ({ ...c, words: c.words.map((w) => ({ ...w })) })),
-  captionStyle: s.captionStyle,
-  captionSettings: { ...s.captionSettings },
-  aspect: s.aspect,
-  reframe: cloneReframe(s.reframe),
-});
-
-const pushHistory = (s: StudioState) => {
-  s.undoStack.push(snapshot(s));
-  if (s.undoStack.length > 80) s.undoStack.shift();
-  s.redoStack = [];
-  s.dirty = true;
-};
-
-const applyHistory = (entry: HistoryEntry): Partial<StudioState> => ({
-  clips: entry.clips.map((c) => ({ ...c })),
-  captions: entry.captions.map((c) => ({ ...c, words: c.words.map((w) => ({ ...w })) })),
-  captionStyle: entry.captionStyle,
-  captionSettings: { ...entry.captionSettings },
-  aspect: entry.aspect,
-  reframe: cloneReframe(entry.reframe),
-  activeClipId: null,
-});
-
-const legacyRanked = (m: Moment, i: number): RankedHighlight => ({
-  ...m,
-  rank: i + 1,
-  reason: { key: "general", label: "Must-Watch Moment", emoji: "✨" },
-  transcript: null,
-  breakdown: {
-    speech: 0, energy: 0, pacing: 0, silence: 0,
-    quotability: 0, completeness: 0, boundary: 0, total: m.score,
-  },
-  confidence: 0.5,
-  source: "local",
-});
+const cloneReframe = (r: ReframeState): ReframeState => ({ ...r, track: r.track ? r.track.map((p) => ({ ...p })) : null });
+const snapshot = (s: StudioState): HistoryEntry => ({ clips: s.clips.map((c) => ({ ...c })), captions: s.captions.map((c) => ({ ...c, words: c.words.map((w) => ({ ...w })) })), captionStyle: s.captionStyle, captionSettings: { ...s.captionSettings }, aspect: s.aspect, reframe: cloneReframe(s.reframe) });
+const pushHistory = (s: StudioState) => { s.undoStack.push(snapshot(s)); if (s.undoStack.length > 80) s.undoStack.shift(); s.redoStack = []; s.dirty = true; };
+const applyHistory = (entry: HistoryEntry): Partial<StudioState> => ({ clips: entry.clips.map((c) => ({ ...c })), captions: entry.captions.map((c) => ({ ...c, words: c.words.map((w) => ({ ...w })) })), captionStyle: entry.captionStyle, captionSettings: { ...entry.captionSettings }, aspect: entry.aspect, reframe: cloneReframe(entry.reframe), activeClipId: null });
+const legacyRanked = (m: Moment, i: number): RankedHighlight => ({ ...m, rank: i + 1, reason: { key: "general", label: "Must-Watch Moment", emoji: "✨" }, transcript: null, breakdown: { speech: 0, energy: 0, pacing: 0, silence: 0, quotability: 0, completeness: 0, boundary: 0, total: m.score }, confidence: 0.5, source: "local" });
 
 export const useStudio = create<StudioState>()((set, get) => ({
-  media: null,
-  source: null,
-  analyzing: false,
-  analyzeProgress: 0,
-  analyzeStage: "",
-  analysis: null,
-  analysisAbort: null,
-  pendingHighlights: [],
-  highlightSource: "local",
-  clipLength: 30,
-  aiAnalyzing: false,
-  aiProgress: 0,
-  aiStage: "",
-  aiFailed: false,
-  clips: [],
-  captions: [],
-  captionStyle: "pop",
-  captionSettings: presetFor("pop"),
-  showCaptions: true,
-  showSafeZones: false,
-  reframe: { ...DEFAULT_REFRAME },
-  aspect: "9:16",
-  playhead: 0,
-  isPlaying: false,
-  activeClipId: null,
-  zoom: 90,
-  exportState: "idle",
-  exportProgress: 0,
-  exportResultUrl: null,
-  exportFormat: "mp4",
-  transcribing: false,
-  transcribeProgress: 0,
-  transcribeStage: "idle",
-  transcribeModel: "base.en",
-  toast: null,
-  pendingProject: null,
-  undoStack: [],
-  redoStack: [],
-  projectName: "",
-  dirty: false,
+  media: null, source: null, analyzing: false, analyzeProgress: 0, analyzeStage: "", analysis: null, analysisAbort: null, pendingHighlights: [], highlightSource: "local", clipLength: 30,
+  aiAnalyzing: false, aiProgress: 0, aiStage: "", aiFailed: false, clips: [], captions: [], captionStyle: "pop", captionSettings: presetFor("pop"), showCaptions: true, showSafeZones: false,
+  reframe: { ...DEFAULT_REFRAME }, aspect: "9:16", playhead: 0, isPlaying: false, activeClipId: null, zoom: 90, exportState: "idle", exportProgress: 0, exportResultUrl: null, exportFormat: "mp4",
+  transcribing: false, transcribeProgress: 0, transcribeStage: "idle", transcribeModel: "base.en", toast: null, pendingProject: null, undoStack: [], redoStack: [], projectName: "", dirty: false,
 
-  ingest: async (file: File) => {
-    const state = get();
-    if (state.media?.url) URL.revokeObjectURL(state.media.url);
-    if (state.exportResultUrl) URL.revokeObjectURL(state.exportResultUrl);
-    state.analysisAbort?.abort();
-
-    const abort = new AbortController();
-    set({
-      analyzing: true,
-      analyzeProgress: 0.02,
-      analyzeStage: "Preparing",
-      exportState: "idle",
-      exportResultUrl: null,
-      analysisAbort: abort,
-    });
-
+  ingest: async (file) => {
+    const state = get(); if (state.media?.url) URL.revokeObjectURL(state.media.url); if (state.exportResultUrl) URL.revokeObjectURL(state.exportResultUrl); state.analysisAbort?.abort();
+    const abort = new AbortController(); set({ analyzing: true, analyzeProgress: 0.02, analyzeStage: "Preparing", exportState: "idle", exportResultUrl: null, analysisAbort: abort });
     const url = URL.createObjectURL(file);
-    const dims = await new Promise<{ w: number; h: number; duration: number }>((resolve) => {
-      const v = document.createElement("video");
-      v.preload = "metadata";
-      v.onloadedmetadata = () => resolve({ w: v.videoWidth || 1920, h: v.videoHeight || 1080, duration: v.duration || 0 });
-      v.onerror = () => resolve({ w: 1920, h: 1080, duration: 0 });
-      v.src = url;
-    });
-
-    let analysis: AnalysisResult | null = null;
-    let highlights: RankedHighlight[] = [];
-    try {
-      const payload = await analyzeWithHighlights(file, get().clipLength, 10, (p, stage) => set({ analyzeProgress: p, analyzeStage: stage ?? "" }), abort.signal);
-      if (payload) {
-        analysis = payload.analysis;
-        highlights = payload.highlights;
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        URL.revokeObjectURL(url);
-        set({ analyzing: false, analyzeProgress: 0, analyzeStage: "", analysisAbort: null });
-        return;
-      }
-      console.error("[ittyclip] analysis failed:", err);
-      analysis = null;
-    }
-
-    const noLocalAnalysis = analysis === null;
-    const media: MediaInfo = {
-      name: file.name,
-      url,
-      size: file.size,
-      duration: analysis?.duration || dims.duration || 0,
-      width: dims.w,
-      height: dims.h,
-      mime: file.type || "video/mp4",
-    };
-    const legacy = (analysis?.moments ?? []).map(legacyRanked);
-    const pool = highlights.length > 0 ? highlights : legacy;
-
-    set({
-      media,
-      source: file,
-      analysis,
-      analyzing: false,
-      analyzeProgress: 1,
-      analyzeStage: "",
-      analysisAbort: null,
-      pendingHighlights: pool,
-      highlightSource: "local",
-      clips: pool.slice(0, 3),
-      activeClipId: pool[0]?.id ?? null,
-      captions: [],
-      transcribeStage: "idle",
-      transcribeProgress: 0,
-      playhead: 0,
-      isPlaying: false,
-      undoStack: [],
-      redoStack: [],
-      projectName: file.name,
-      dirty: false,
-      ...(noLocalAnalysis ? { toast: "Couldn't decode this video's audio — auto-highlights are off, but the studio is ready for manual editing." } : {}),
-    });
-
-    const pj = get().pendingProject;
-    if (pj) {
-      const fresh = get();
-      pushHistory(fresh);
-      set({
-        clips: pj.clips,
-        captions: pj.captions,
-        captionStyle: pj.captionStyle,
-        captionSettings: pj.captionSettings,
-        aspect: pj.aspect,
-        reframe: cloneReframe(pj.reframe),
-        clipLength: CLIP_LENGTHS.includes(pj.settings.clipLength) ? pj.settings.clipLength : 30,
-        pendingProject: null,
-        projectName: pj.project.name,
-        dirty: false,
-      });
-      set({ toast: "Project restored with the original media." });
-    }
+    const dims = await new Promise<{ w: number; h: number; duration: number }>((resolve) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => resolve({ w: v.videoWidth || 1920, h: v.videoHeight || 1080, duration: v.duration || 0 }); v.onerror = () => resolve({ w: 1920, h: 1080, duration: 0 }); v.src = url; });
+    let analysis: AnalysisResult | null = null; let highlights: RankedHighlight[] = [];
+    try { const payload = await analyzeWithHighlights(file, get().clipLength, 10, (p, stage) => set({ analyzeProgress: p, analyzeStage: stage ?? "" }), abort.signal); if (payload) { analysis = payload.analysis; highlights = payload.highlights; } }
+    catch (err) { if (err instanceof DOMException && err.name === "AbortError") { URL.revokeObjectURL(url); set({ analyzing: false, analyzeProgress: 0, analyzeStage: "", analysisAbort: null }); return; } console.error("[ittyclip] analysis failed:", err); }
+    const pool = highlights.length > 0 ? highlights : (analysis?.moments ?? []).map(legacyRanked);
+    set({ media: { name: file.name, url, size: file.size, duration: analysis?.duration || dims.duration || 0, width: dims.w, height: dims.h, mime: file.type || "video/mp4" }, source: file, analysis, analyzing: false, analyzeProgress: 1, analyzeStage: "", analysisAbort: null, pendingHighlights: pool, highlightSource: "local", clips: pool.slice(0, 3), activeClipId: pool[0]?.id ?? null, captions: [], transcribeStage: "idle", transcribeProgress: 0, playhead: 0, isPlaying: false, undoStack: [], redoStack: [], projectName: file.name, dirty: false, aiFailed: false, aiAnalyzing: false, aiProgress: 0, aiStage: "" });
+    const pj = get().pendingProject; if (pj) { pushHistory(get()); set({ clips: pj.clips, captions: pj.captions, captionStyle: pj.captionStyle, captionSettings: pj.captionSettings, aspect: pj.aspect, reframe: cloneReframe(pj.reframe), clipLength: CLIP_LENGTHS.includes(pj.settings.clipLength) ? pj.settings.clipLength : 30, pendingProject: null, projectName: pj.project.name, dirty: false }); set({ toast: "Project restored with the original media." }); }
   },
-
-  cancelAnalysis: () => get().analysisAbort?.abort(),
-  setMedia: (m) => set({ media: m }),
-  setAnalysis: (a) => set({ analysis: a }),
-  setPlayhead: (t) => {
-    const duration = get().media?.duration ?? 0;
-    set({ playhead: Math.min(Math.max(0, t), Math.max(0, duration)) });
-  },
-  setPlaying: (b) => set({ isPlaying: b }),
-  tick: (t) => {
-    const duration = get().media?.duration ?? 0;
-    set({ playhead: Math.min(Math.max(0, t), Math.max(0, duration)) });
-  },
-
-  addClip: (m) => {
-    const s = get();
-    const duration = s.media?.duration ?? Number.POSITIVE_INFINITY;
-    const start = Math.max(0, Math.min(m.start, duration));
-    const end = Math.max(start + 0.05, Math.min(m.end, duration));
-    pushHistory(s);
-    const copy = { ...m, id: uid(), start, end };
-    set((st) => ({ clips: [...st.clips, copy].sort((a, b) => a.start - b.start), activeClipId: copy.id }));
-  },
-  removeClip: (id) => {
-    pushHistory(get());
-    set((s) => ({ clips: s.clips.filter((c) => c.id !== id), activeClipId: s.activeClipId === id ? null : s.activeClipId }));
-  },
-  updateClip: (id, patch) => {
-    const duration = get().media?.duration ?? Number.POSITIVE_INFINITY;
-    set((s) => ({
-      clips: s.clips.map((c) => {
-        if (c.id !== id) return c;
-        let start = patch.start ?? c.start;
-        let end = patch.end ?? c.end;
-        if (patch.start !== undefined || patch.end !== undefined) {
-          start = Math.max(0, Math.min(start, duration));
-          end = Math.max(start + 0.05, Math.min(end, duration));
-          if (end <= start + 0.05) start = Math.max(0, end - 0.05);
-        }
-        return { ...c, ...patch, start, end };
-      }),
-      dirty: true,
-    }));
-  },
+  cancelAnalysis: () => get().analysisAbort?.abort(), setMedia: (m) => set({ media: m }), setAnalysis: (a) => set({ analysis: a }),
+  setPlayhead: (t) => { const duration = get().media?.duration ?? 0; set({ playhead: Math.min(Math.max(0, t), Math.max(0, duration)) }); }, setPlaying: (b) => set({ isPlaying: b }),
+  tick: (t) => { const duration = get().media?.duration ?? 0; set({ playhead: Math.min(Math.max(0, t), Math.max(0, duration)) }); },
+  addClip: (m) => { const s = get(); const duration = s.media?.duration ?? Number.POSITIVE_INFINITY; const start = Math.max(0, Math.min(m.start, duration)); const end = Math.max(start + 0.05, Math.min(m.end, duration)); pushHistory(s); const copy = { ...m, id: uid(), start, end }; set((st) => ({ clips: [...st.clips, copy].sort((a, b) => a.start - b.start), activeClipId: copy.id })); },
+  removeClip: (id) => { pushHistory(get()); set((s) => ({ clips: s.clips.filter((c) => c.id !== id), activeClipId: s.activeClipId === id ? null : s.activeClipId })); },
+  updateClip: (id, patch) => { const duration = get().media?.duration ?? Number.POSITIVE_INFINITY; set((s) => ({ clips: s.clips.map((c) => { if (c.id !== id) return c; let start = patch.start ?? c.start; let end = patch.end ?? c.end; if (patch.start !== undefined || patch.end !== undefined) { start = Math.max(0, Math.min(start, duration)); end = Math.max(start + 0.05, Math.min(end, duration)); if (end <= start + 0.05) start = Math.max(0, end - 0.05); } return { ...c, ...patch, start, end }; }), dirty: true })); },
   setActiveClip: (id) => set({ activeClipId: id }),
-  addAllHighlights: () => {
-    pushHistory(get());
-    set((s) => {
-      const existing = new Set(s.clips.map((c) => c.start.toFixed(3)));
-      const fresh = s.pendingHighlights.filter((m) => !existing.has(m.start.toFixed(3))).map((m) => ({ ...m, id: uid() }));
-      return { clips: [...s.clips, ...fresh].sort((a, b) => a.start - b.start) };
-    });
-  },
-  generateTopClips: () => {
-    const s = get();
-    if (s.pendingHighlights.length === 0) {
-      set({ toast: "No highlights to generate — drop a video first." });
-      return;
-    }
-    pushHistory(s);
-    let added = 0;
-    set((st) => {
-      const existing = new Set(st.clips.map((c) => c.start.toFixed(3)));
-      const candidates = [...st.pendingHighlights]
-        .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999) || b.score - a.score)
-        .slice(0, 10);
-      const fresh = candidates
-        .filter((m) => !existing.has(m.start.toFixed(3)))
-        .map((m, i) => ({ ...m, id: uid(), label: `Highlight ${m.rank ?? i + 1}` }));
-      added = fresh.length;
-      const clips = [...st.clips, ...fresh].sort((a, b) => a.start - b.start);
-      return { clips, activeClipId: fresh[0]?.id ?? st.activeClipId };
-    });
-    set({ toast: `Added ${added} top highlight${added === 1 ? "" : "s"} to the timeline` });
-  },
-  clearTimeline: () => {
-    pushHistory(get());
-    set({ clips: [], activeClipId: null });
-  },
-
-  setClipLength: (len) => {
-    if (!CLIP_LENGTHS.includes(len)) return;
-    set({ clipLength: len, dirty: true });
-    if (get().highlightSource === "ai") {
-      set({ toast: `Clip length: ${len}s — AI picks keep their windows` });
-      return;
-    }
-    get().rerankHighlights();
-    set({ toast: `Clip length: ${len}s — highlights re-ranked` });
-  },
-  rerankHighlights: () => {
-    const s = get();
-    if (!s.analysis) return;
-    const pending = runHighlightAnalysis({ envelope: s.analysis.envelope, hopSec: s.analysis.hopSec, duration: s.analysis.duration, silence: s.analysis.silence, transcript: s.captions.length > 0 ? s.captions : null, clipLength: s.clipLength, maxResults: 10 });
-    if (pending.length === 0) return;
-    set({ pendingHighlights: pending, highlightSource: "local" });
-  },
-
-  analyzeWithAI: async () => {
-    const s = get();
-    if (!s.analysis) {
-      set({ toast: "Local analysis is unavailable for this video/browser." });
-      return;
-    }
-    if (s.captions.length === 0) {
-      set({ toast: "Transcribe the video first — the AI works from the transcript." });
-      return;
-    }
-    if (s.aiAnalyzing) return;
-    set({ aiAnalyzing: true, aiProgress: 0.02, aiStage: "Connecting to AI…", aiFailed: false });
-    try {
-      const { analyzeWithAi } = await import("@/lib/ai");
-      const highlights = await analyzeWithAi({ transcript: s.captions, envelope: s.analysis.envelope, hopSec: s.analysis.hopSec, duration: s.analysis.duration, silence: s.analysis.silence, speech: s.analysis.speech, energy: s.analysis.energy, clipLength: s.clipLength, maxResults: 10, onProgress: (p, stage) => set({ aiProgress: p, aiStage: stage }) });
-      set({ pendingHighlights: highlights, highlightSource: "ai", aiAnalyzing: false, aiProgress: 1, aiStage: "" });
-      set({ toast: "AI ranked the best moments for you" });
-    } catch (err) {
-      console.error("[ittyclip] AI analysis failed:", err);
-      set({ aiAnalyzing: false, aiProgress: 0, aiStage: "", aiFailed: true });
-      get().rerankHighlights();
-      set({ toast: "AI engine unavailable — showing local results instead" });
-    }
-  },
-
-  setCaptions: (lines) => {
-    pushHistory(get());
-    set({ captions: lines.map((l) => ({ ...l, start: Math.max(0, l.start), end: Math.max(l.start + 0.05, l.end) })) });
-  },
-  makeCaptionsFromText: (text) => {
-    pushHistory(get());
-    const s = get();
-    const duration = Math.max(0.1, s.media?.duration || 10);
-    if (!s.analysis || s.analysis.silence.length === 0) {
-      set({ captions: makeLines(text.split(/\s+/).filter(Boolean), duration) });
-      return;
-    }
-    set({ captions: segmentTranscript(text, s.analysis.silence, 9) });
-  },
-  addCaptionAt: () => {
-    pushHistory(get());
-    const s = get();
-    const duration = Math.max(0.1, s.media?.duration ?? 10);
-    const start = Math.min(Math.max(0, s.playhead), Math.max(0, duration - 0.5));
-    const end = Math.min(duration, start + Math.min(2.2, duration));
-    const line: CaptionLine = { id: uid(), start, end: Math.max(start + 0.05, end), text: "New caption", words: [] };
-    set((st) => ({ captions: [...st.captions, line].sort((a, b) => a.start - b.start) }));
-  },
-  updateCaption: (id, patch) => {
-    const duration = get().media?.duration ?? Number.POSITIVE_INFINITY;
-    set((s) => ({
-      captions: s.captions.map((c) => {
-        if (c.id !== id) return c;
-        let start = patch.start ?? c.start;
-        let end = patch.end ?? c.end;
-        start = Math.max(0, Math.min(start, duration));
-        end = Math.max(start + 0.05, Math.min(end, duration));
-        return { ...c, ...patch, start, end };
-      }),
-      dirty: true,
-    }));
-  },
-  removeCaption: (id) => {
-    pushHistory(get());
-    set((s) => ({ captions: s.captions.filter((c) => c.id !== id) }));
-  },
-  commitHistory: () => pushHistory(get()),
-
-  setCaptionStyle: (s) => {
-    pushHistory(get());
-    set({ captionStyle: s, captionSettings: presetFor(s) });
-  },
-  updateCaptionSettings: (patch) => set((s) => ({ captionSettings: { ...s.captionSettings, ...patch }, dirty: true })),
-  toggleCaptions: () => set((s) => ({ showCaptions: !s.showCaptions })),
-  toggleSafeZones: () => set((s) => ({ showSafeZones: !s.showSafeZones })),
-  setAspect: (a) => {
-    pushHistory(get());
-    set({ aspect: a });
-  },
-  setZoom: (z) => set({ zoom: Math.min(320, Math.max(30, z)) }),
-
-  updateReframe: (patch) => set((s) => ({ reframe: { ...s.reframe, ...patch }, dirty: true })),
-  commitReframe: () => pushHistory(get()),
-
+  addAllHighlights: () => { pushHistory(get()); set((s) => { const existing = new Set(s.clips.map((c) => c.start.toFixed(3))); const fresh = s.pendingHighlights.filter((m) => !existing.has(m.start.toFixed(3))).map((m) => ({ ...m, id: uid() })); return { clips: [...s.clips, ...fresh].sort((a, b) => a.start - b.start) }; }); },
+  generateTopClips: () => { const s = get(); if (s.pendingHighlights.length === 0) { set({ toast: "No highlights to generate — drop a video first." }); return; } pushHistory(s); let added = 0; set((st) => { const existing = new Set(st.clips.map((c) => c.start.toFixed(3))); const candidates = [...st.pendingHighlights].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999) || b.score - a.score).slice(0, 10); const fresh = candidates.filter((m) => !existing.has(m.start.toFixed(3))).map((m, i) => ({ ...m, id: uid(), label: `Highlight ${m.rank ?? i + 1}` })); added = fresh.length; return { clips: [...st.clips, ...fresh].sort((a, b) => a.start - b.start), activeClipId: fresh[0]?.id ?? st.activeClipId }; }); set({ toast: `Added ${added} top highlight${added === 1 ? "" : "s"} to the timeline` }); },
+  clearTimeline: () => { pushHistory(get()); set({ clips: [], activeClipId: null }); },
+  setClipLength: (len) => { if (!CLIP_LENGTHS.includes(len)) return; set({ clipLength: len, dirty: true }); if (get().highlightSource === "ai") { set({ toast: `Clip length: ${len}s — AI picks keep their windows` }); return; } get().rerankHighlights(); set({ toast: `Clip length: ${len}s — highlights re-ranked` }); },
+  rerankHighlights: () => { const s = get(); if (!s.analysis) return; const pending = runHighlightAnalysis({ envelope: s.analysis.envelope, hopSec: s.analysis.hopSec, duration: s.analysis.duration, silence: s.analysis.silence, transcript: s.captions.length > 0 ? s.captions : null, clipLength: s.clipLength, maxResults: 10 }); if (pending.length > 0) set({ pendingHighlights: pending, highlightSource: "local" }); },
+  analyzeWithAI: async () => { const s = get(); if (!s.analysis) { set({ toast: "Local analysis is unavailable for this video/browser." }); return; } if (s.captions.length === 0) { set({ toast: "Transcribe the video first — the AI works from the transcript." }); return; } if (s.aiAnalyzing) return; set({ aiAnalyzing: true, aiProgress: 0.02, aiStage: "Connecting to AI…", aiFailed: false }); try { const { analyzeWithAi } = await import("@/lib/ai"); const highlights = await analyzeWithAi({ transcript: s.captions, envelope: s.analysis.envelope, hopSec: s.analysis.hopSec, duration: s.analysis.duration, silence: s.analysis.silence, speech: s.analysis.speech, energy: s.analysis.energy, clipLength: s.clipLength, maxResults: 10, onProgress: (p, stage) => set({ aiProgress: p, aiStage: stage }) }); set({ pendingHighlights: highlights, highlightSource: "ai", aiAnalyzing: false, aiProgress: 1, aiStage: "" }); set({ toast: "AI ranked the best moments for you" }); } catch (err) { console.error("[ittyclip] AI analysis failed:", err); set({ aiAnalyzing: false, aiProgress: 0, aiStage: "", aiFailed: true }); get().rerankHighlights(); set({ toast: "AI engine unavailable — showing local results instead" }); } },
+  setCaptions: (lines) => { pushHistory(get()); set({ captions: lines.map((l) => ({ ...l, start: Math.max(0, l.start), end: Math.max(l.start + 0.05, l.end) })) }); },
+  makeCaptionsFromText: (text) => { pushHistory(get()); const s = get(); const duration = Math.max(0.1, s.media?.duration || 10); if (!s.analysis || s.analysis.silence.length === 0) { set({ captions: makeLines(text.split(/\s+/).filter(Boolean), duration) }); return; } set({ captions: segmentTranscript(text, s.analysis.silence, 9) }); },
+  addCaptionAt: () => { pushHistory(get()); const s = get(); const duration = Math.max(0.1, s.media?.duration ?? 10); const start = Math.min(Math.max(0, s.playhead), Math.max(0, duration - 0.5)); const end = Math.min(duration, start + Math.min(2.2, duration)); set((st) => ({ captions: [...st.captions, { id: uid(), start, end: Math.max(start + 0.05, end), text: "New caption", words: [] }].sort((a, b) => a.start - b.start) })); },
+  updateCaption: (id, patch) => { const duration = get().media?.duration ?? Number.POSITIVE_INFINITY; set((s) => ({ captions: s.captions.map((c) => { if (c.id !== id) return c; let start = patch.start ?? c.start; let end = patch.end ?? c.end; start = Math.max(0, Math.min(start, duration)); end = Math.max(start + 0.05, Math.min(end, duration)); return { ...c, ...patch, start, end }; }), dirty: true })); },
+  removeCaption: (id) => { pushHistory(get()); set((s) => ({ captions: s.captions.filter((c) => c.id !== id) })); },
+  commitHistory: () => pushHistory(get()), setCaptionStyle: (s) => { pushHistory(get()); set({ captionStyle: s, captionSettings: presetFor(s) }); },
+  updateCaptionSettings: (patch) => set((s) => ({ captionSettings: { ...s.captionSettings, ...patch }, dirty: true })), toggleCaptions: () => set((s) => ({ showCaptions: !s.showCaptions })), toggleSafeZones: () => set((s) => ({ showSafeZones: !s.showSafeZones })),
+  setAspect: (a) => { pushHistory(get()); set({ aspect: a }); }, setZoom: (z) => set({ zoom: Math.min(320, Math.max(30, z)) }),
+  updateReframe: (patch) => set((s) => ({ reframe: { ...s.reframe, ...patch }, dirty: true })), commitReframe: () => pushHistory(get()),
   setExportState: (s, progress, url) => set({ exportState: s, exportProgress: progress ?? 0, exportResultUrl: url ?? null }),
-  setTranscribeModel: (m) => set({ transcribeModel: m }),
-
+  setTranscribeModel: (m) => { if (m !== "tiny.en" && m !== "base.en") return; set({ transcribeModel: m, transcribeStage: "idle", transcribeProgress: 0, toast: `Whisper model: ${m === "base.en" ? "Base" : "Tiny"}` }); },
   transcribe: async (model) => {
-    const s = get();
-    const source = s.source;
-    const pick = model ?? s.transcribeModel;
-    if (!source) {
-      set({ toast: "Upload a video first" });
-      return;
-    }
+    const s = get(); const source = s.source; const pick = model === "tiny.en" || model === "base.en" ? model : s.transcribeModel;
+    if (!source) { set({ toast: "Upload a video first" }); return; }
     if (s.transcribing) return;
-    set({ transcribing: true, transcribeStage: "model", transcribeProgress: 0.01 });
+    set({ transcribing: true, transcribeStage: "model", transcribeProgress: 0.01, transcribeModel: pick, toast: `Preparing ${pick === "base.en" ? "Base" : "Tiny"} transcription…` });
     try {
-      const { decodeAudioFile } = await import("@/lib/audio");
-      const { ensureModelCached, transcribeCaptions } = await import("@/lib/whisper");
+      const { decodeAudioFile } = await import("@/lib/audio"); const { ensureModelCached, transcribeCaptions } = await import("@/lib/whisper");
       const buffer = await decodeAudioFile(source);
       await ensureModelCached(pick, (p) => set({ transcribeStage: "model", transcribeProgress: p }));
       const lines = await transcribeCaptions(buffer, pick, (p) => set({ transcribeStage: "running", transcribeProgress: p }));
-      if (lines.length === 0) {
-        set({ transcribing: false, transcribeStage: "error", toast: "No speech detected in this video." });
-        return;
-      }
+      if (lines.length === 0) { set({ transcribing: false, transcribeStage: "error", transcribeProgress: 0, toast: "No speech detected in this video." }); return; }
       pushHistory(get());
       set({ captions: lines, transcribing: false, transcribeStage: "done", transcribeProgress: 1, toast: `Transcribed ${lines.length} lines (${lines.reduce((n, l) => n + l.words.length, 0)} words)` });
       if (get().highlightSource !== "ai") get().rerankHighlights();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      set({ transcribing: false, transcribeStage: "error", toast: msg || "Transcription failed" });
-      console.error("[ittyclip] transcription error:", msg);
-      throw err;
-    }
-  },
-
-  exportProject: () => JSON.stringify(serializeProject({
-    media: get().media ? { name: get().media!.name, duration: get().media!.duration } : null,
-    clips: get().clips,
-    captions: get().captions,
-    captionStyle: get().captionStyle,
-    captionSettings: get().captionSettings,
-    aspect: get().aspect,
-    reframe: get().reframe,
-    clipLength: get().clipLength,
-    highlightsSource: get().highlightSource,
-  }), null, 2),
-
-  loadProject: (json) => {
-    const result = parseProject(json);
-    if (!result.ok) {
-      set({ toast: result.reason });
+      console.error("[ittyclip] transcription error:", err);
+      set({ transcribing: false, transcribeStage: "error", transcribeProgress: 0, toast: msg || "Transcription failed — try Tiny model if Base cannot load" });
       return;
     }
-    const pj = result.project;
-    pushHistory(get());
-    if (get().media) {
-      set({ clips: pj.clips, captions: pj.captions, captionStyle: pj.captionStyle, captionSettings: pj.captionSettings, aspect: pj.aspect, reframe: cloneReframe(pj.reframe), clipLength: CLIP_LENGTHS.includes(pj.settings.clipLength) ? pj.settings.clipLength : 30, activeClipId: null, projectName: pj.project.name, dirty: false });
-      set({ toast: "Project loaded." });
-    } else {
-      set({ pendingProject: pj, toast: "Project loaded — drop the original video to restore it." });
-    }
   },
-
-  undo: () => {
-    const s = get();
-    const entry = s.undoStack.pop();
-    if (!entry) {
-      set({ toast: "Nothing to undo" });
-      return;
-    }
-    s.redoStack.push(snapshot(s));
-    if (s.redoStack.length > 80) s.redoStack.shift();
-    set({ ...applyHistory(entry), toast: "Undone", dirty: true });
-  },
-  redo: () => {
-    const s = get();
-    const entry = s.redoStack.pop();
-    if (!entry) {
-      set({ toast: "Nothing to redo" });
-      return;
-    }
-    s.undoStack.push(snapshot(s));
-    if (s.undoStack.length > 80) s.undoStack.shift();
-    set({ ...applyHistory(entry), toast: "Redone", dirty: true });
-  },
-
-  showToast: (msg) => {
-    set({ toast: msg });
-    setTimeout(() => { if (get().toast === msg) set({ toast: null }); }, 2600);
-  },
-
-  reset: () => {
-    const s = get();
-    if (s.media?.url) URL.revokeObjectURL(s.media.url);
-    if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl);
-    s.analysisAbort?.abort();
-    set({
-      media: null, source: null, analyzing: false, analyzeProgress: 0, analyzeStage: "", analysis: null, analysisAbort: null,
-      pendingHighlights: [], highlightSource: "local", clipLength: 30, aiAnalyzing: false, aiProgress: 0, aiStage: "", aiFailed: false,
-      clips: [], captions: [], captionStyle: "pop", captionSettings: presetFor("pop"), showCaptions: true, showSafeZones: false,
-      reframe: { ...DEFAULT_REFRAME }, aspect: "9:16", playhead: 0, isPlaying: false, activeClipId: null, zoom: 90,
-      exportState: "idle", exportProgress: 0, exportResultUrl: null, transcribing: false, transcribeProgress: 0,
-      transcribeStage: "idle", toast: null, pendingProject: null, undoStack: [], redoStack: [], projectName: "", dirty: false,
-    });
-  },
-
-  setProjectName: (name) => set({ projectName: name, dirty: true }),
-  newProject: () => {
-    pushHistory(get());
-    set({ clips: [], captions: [], captionStyle: "pop", captionSettings: presetFor("pop"), showSafeZones: false, reframe: { ...DEFAULT_REFRAME }, aspect: "9:16", activeClipId: null, playhead: 0, isPlaying: false, undoStack: [], redoStack: [], projectName: "Untitled", dirty: false });
-    set({ toast: "New project — timeline cleared" });
-  },
-  markSaved: () => set({ dirty: false }),
-
-  makeShort: (id) => {
-    const s = get();
-    const h = s.pendingHighlights.find((x) => x.id === id);
-    if (!h) {
-      set({ toast: "Pick a highlight first" });
-      return;
-    }
-    const exists = s.clips.some((c) => Math.abs(c.start - h.start) < 0.05 && Math.abs(c.end - h.end) < 0.05);
-    if (exists) {
-      const existing = s.clips.find((c) => Math.abs(c.start - h.start) < 0.05 && Math.abs(c.end - h.end) < 0.05);
-      get().setActiveClip(existing?.id ?? null);
-    } else {
-      get().addClip(h);
-    }
-    set({
-      aspect: "9:16",
-      reframe: { ...s.reframe, enabled: true, mode: s.reframe.track ? "tracked" : "center", scale: Math.max(s.reframe.scale, 1.3), status: s.reframe.track ? "done" : "idle" },
-      showCaptions: s.captions.length > 0 ? true : s.showCaptions,
-    });
-    set({ toast: "Short staged — 9:16 · auto-reframe · captions" });
-  },
+  exportProject: () => JSON.stringify(serializeProject({ media: get().media ? { name: get().media!.name, duration: get().media!.duration } : null, clips: get().clips, captions: get().captions, captionStyle: get().captionStyle, captionSettings: get().captionSettings, aspect: get().aspect, reframe: get().reframe, clipLength: get().clipLength, highlightsSource: get().highlightSource }), null, 2),
+  loadProject: (json) => { const result = parseProject(json); if (!result.ok) { set({ toast: result.reason }); return; } const pj = result.project; pushHistory(get()); if (get().media) { set({ clips: pj.clips, captions: pj.captions, captionStyle: pj.captionStyle, captionSettings: pj.captionSettings, aspect: pj.aspect, reframe: cloneReframe(pj.reframe), clipLength: CLIP_LENGTHS.includes(pj.settings.clipLength) ? pj.settings.clipLength : 30, activeClipId: null, projectName: pj.project.name, dirty: false }); set({ toast: "Project loaded." }); } else { set({ pendingProject: pj, toast: "Project loaded — drop the original video to restore it." }); } },
+  undo: () => { const s = get(); const entry = s.undoStack.pop(); if (!entry) { set({ toast: "Nothing to undo" }); return; } s.redoStack.push(snapshot(s)); if (s.redoStack.length > 80) s.redoStack.shift(); set({ ...applyHistory(entry), toast: "Undone", dirty: true }); },
+  redo: () => { const s = get(); const entry = s.redoStack.pop(); if (!entry) { set({ toast: "Nothing to redo" }); return; } s.undoStack.push(snapshot(s)); if (s.undoStack.length > 80) s.undoStack.shift(); set({ ...applyHistory(entry), toast: "Redone", dirty: true }); },
+  showToast: (msg) => { set({ toast: msg }); window.setTimeout(() => set((st) => (st.toast === msg ? { toast: null } : {})), 2400); },
+  reset: () => { const s = get(); if (s.media?.url) URL.revokeObjectURL(s.media.url); if (s.exportResultUrl) URL.revokeObjectURL(s.exportResultUrl); s.analysisAbort?.abort(); set({ media: null, source: null, analyzing: false, analyzeProgress: 0, analyzeStage: "", analysis: null, analysisAbort: null, pendingHighlights: [], highlightSource: "local", clips: [], captions: [], activeClipId: null, playhead: 0, isPlaying: false, exportState: "idle", exportProgress: 0, exportResultUrl: null, transcribing: false, transcribeProgress: 0, transcribeStage: "idle", aiAnalyzing: false, aiProgress: 0, aiStage: "", aiFailed: false, undoStack: [], redoStack: [], dirty: false }); },
+  setProjectName: (name) => set({ projectName: name, dirty: true }), newProject: () => get().reset(), markSaved: () => set({ dirty: false }),
+  makeShort: (id) => { const s = get(); const m = s.pendingHighlights.find((h) => h.id === id) ?? s.clips.find((c) => c.id === id); if (!m) return; const exists = s.clips.some((c) => Math.abs(c.start - m.start) < 0.05 && Math.abs(c.end - m.end) < 0.05); if (!exists) { pushHistory(s); set({ clips: [...s.clips, { ...m, id: uid() }].sort((a, b) => a.start - b.start), activeClipId: m.id }); } }
 }));
