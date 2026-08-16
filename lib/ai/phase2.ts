@@ -1,4 +1,4 @@
-import { runAi } from "@/lib/ai/server-client";
+import { runAi, type AiRequestConfig } from "@/lib/ai/server-client";
 import type { AiTranscriptLine, AiPromptSignals } from "@/lib/ai/prompt";
 
 export type Phase2Operation = "insights" | "hooks" | "titles" | "captions" | "trim";
@@ -64,7 +64,7 @@ function strings(value: unknown, max: number, maxLen = 240): string[] {
     .map((x) => x.trim().slice(0, maxLen));
 }
 
-export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, extra = "") {
+export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, extra = "", ai?: AiRequestConfig) {
   const systemBase = "You are IttyClip's production video-editing intelligence. Never invent facts not supported by the supplied transcript or signals. Return JSON only. Keep timestamps within the supplied video duration. Be concise and actionable.";
   const userBase = `${contextMessage(ctx)}\n${extra}`;
 
@@ -72,6 +72,7 @@ export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, 
     return runAi({
       operation,
       cacheKey: `p2:insights:${JSON.stringify(ctx)}`,
+      ...(ai ?? {}),
       cacheTtlMs: 30 * 60_000,
       messages: [{ role: "system", content: `${systemBase} Analyze the video's content, pacing and strongest moments.` }, { role: "user", content: `${userBase}\nReturn {"topic":string,"tone":string,"audience":string,"summary":string,"hookStrength":0-100,"pacing":0-100,"clarity":0-100,"bestMoment":{"start":number,"end":number,"reason":string},"suggestions":[string]}.` }],
       validate: (raw) => {
@@ -89,6 +90,7 @@ export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, 
     return runAi({
       operation,
       cacheKey: `p2:${operation}:${JSON.stringify(ctx)}`,
+      ...(ai ?? {}),
       cacheTtlMs: 30 * 60_000,
       messages: [{ role: "system", content: `${systemBase} Generate ${kind}. Do not claim something the transcript does not support.` }, { role: "user", content: `${userBase}\nReturn {"items":[string]}. Return exactly 10 useful options when possible.` }],
       validate: (raw) => { const o = parseObject(raw); const items = strings(o.items, 10, 120); if (!items.length) throw new Error("AI returned no options"); return { items }; }
@@ -99,6 +101,7 @@ export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, 
     return runAi({
       operation,
       cacheKey: `p2:captions:${JSON.stringify(ctx)}`,
+      ...(ai ?? {}),
       cacheTtlMs: 30 * 60_000,
       messages: [{ role: "system", content: `${systemBase} Optimize caption grouping. Preserve every supplied word's meaning. Use short, readable groups and identify emphasis words. Do not invent transcript text.` }, { role: "user", content: `${userBase}\nReturn {"segments":[{"start":number,"end":number,"text":string,"emphasis":[string]}]}. Keep timestamps inside the selected clip when one is supplied.` }],
       validate: (raw) => {
@@ -120,6 +123,7 @@ export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, 
   return runAi({
     operation,
     cacheKey: `p2:trim:${JSON.stringify(ctx)}`,
+    ...(ai ?? {}),
     cacheTtlMs: 10 * 60_000,
     messages: [{ role: "system", content: `${systemBase} Find removable dead air, repetition, weak opening/ending and filler. Return edit suggestions only; never modify the source directly.` }, { role: "user", content: `${userBase}\nReturn {"start":number,"end":number,"cuts":[{"start":number,"end":number,"reason":string}],"reason":string}. The proposed start/end must remain within the selected clip if present.` }],
     validate: (raw) => {

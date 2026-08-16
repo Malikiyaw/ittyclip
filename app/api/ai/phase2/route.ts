@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runPhase2, sanitizeContext, type Phase2Operation } from "@/lib/ai/phase2";
-import { AiClientError } from "@/lib/ai/server-client";
+import { AiClientError, readAiRequestConfig } from "@/lib/ai/server-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (!OPERATIONS.includes(operation)) return NextResponse.json({ error: "Unsupported AI operation." }, { status: 400 });
     const context = sanitizeContext(raw.context);
     const extra = typeof raw.extra === "string" ? raw.extra.slice(0, 5000) : "";
-    const result = await runPhase2(operation, context, extra);
+    const result = await runPhase2(operation, context, extra, readAiRequestConfig(req));
     return NextResponse.json({ operation, ...result });
   } catch (error) {
     if (error instanceof AiClientError) {

@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import { useStudio } from "@/store/studio";
 import { uid, type CaptionLine, type CaptionStyleKey } from "@/lib/types";
+import { aiHeaders } from "@/lib/ai/settings";
 
 interface CaptionSegment { start: number; end: number; text: string; emphasis?: string[] }
 
 async function callPhase3(operation: "caption-intelligence" | "caption-style", context: unknown) {
-  const response = await fetch("/api/ai/phase3", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, context }) });
+  const response = await fetch("/api/ai/phase3", { method: "POST", headers: aiHeaders(), body: JSON.stringify({ operation, context }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "AI request failed");
   return data as { value: { segments?: CaptionSegment[]; style?: CaptionStyleKey; reason?: string; animation?: "none" | "pop" | "fade" | "slide-up" | "word-pop" } };

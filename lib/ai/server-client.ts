@@ -5,6 +5,27 @@ import { recordAiUsage } from "@/lib/ai/usage";
 export const NVIDIA_ENDPOINT = "https://integrate.api.nvidia.com/v1/chat/completions";
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 
+export interface AiRequestConfig {
+  /** Per-request API key (e.g. from the `x-ai-key` header). Falls back to NVIDIA_API_KEY env. */
+  apiKey?: string;
+  /** Optional OpenAI-compatible endpoint override (defaults to NVIDIA). */
+  baseUrl?: string;
+}
+
+/**
+ * Reads a per-request AI config from the request headers. Lets the studio
+ * accept a key entered by the user ("bring your own key") without the key
+ * ever living on the deployment server.
+ */
+export function readAiRequestConfig(req: Request): AiRequestConfig {
+  const apiKey = req.headers.get("x-ai-key")?.trim();
+  const baseUrl = req.headers.get("x-ai-base-url")?.trim();
+  return {
+    apiKey: apiKey || undefined,
+    baseUrl: baseUrl || undefined,
+  };
+}
+
 export type RunAiOptions<T> = {
   operation: string;
   messages: AiMessage[];
@@ -16,7 +37,7 @@ export type RunAiOptions<T> = {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
-};
+} & AiRequestConfig;
 
 export class AiClientError extends Error {
   constructor(
@@ -44,13 +65,13 @@ function extractJson(content: string): unknown {
   }
 }
 
-async function callModel(apiKey: string, model: string, messages: AiMessage[], timeoutMs: number, temperature: number, maxTokens: number, strictJson: boolean) {
+async function callModel(apiKey: string, endpoint: string, model: string, messages: AiMessage[], timeoutMs: number, temperature: number, maxTokens: number, strictJson: boolean) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     let response: Response;
     try {
-      response = await fetch(NVIDIA_ENDPOINT, {
+      response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, ...(strictJson ? { response_format: { type: "json_object" } } : {}) }),
@@ -86,15 +107,16 @@ export async function runAi<T>(options: RunAiOptions<T>) {
     }
   }
 
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) throw new AiClientError("AI engine is not configured on this deployment.", "NOT_CONFIGURED");
+  const apiKey = options.apiKey?.trim() || process.env.NVIDIA_API_KEY;
+  if (!apiKey) throw new AiClientError("AI engine is not configured. Add your free NVIDIA API key in the studio's AI Settings (or set NVIDIA_API_KEY on this deployment).", "NOT_CONFIGURED");
+  const endpoint = options.baseUrl?.trim() || NVIDIA_ENDPOINT;
 
   const primary = options.primaryModel ?? process.env.AI_PRIMARY_MODEL ?? "nvidia/llama-3.3-nemotron-super-49b-v1";
   const fallbacks = options.fallbackModels ?? [process.env.AI_FAST_MODEL ?? "openai/gpt-oss-120b"];
   const models = [primary, ...fallbacks.filter((m) => Boolean(m) && m !== primary)];
   const temperature = options.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
   const maxTokens = options.maxTokens ?? Number(process.env.AI_MAX_TOKENS ?? 3500);
-  const timeoutMs = options.timeoutMs ?? 95_000;
+  const timeoutMs = options.timeoutMs ?? 50_000;
   let attempts = 0;
   let lastError: AiClientError | undefined;
 
@@ -102,7 +124,7 @@ export async function runAi<T>(options: RunAiOptions<T>) {
     for (let retry = 0; retry < 2; retry++) {
       attempts += 1;
       try {
-        const raw = await callModel(apiKey, model, options.messages, model === primary ? timeoutMs : Math.min(timeoutMs, 60_000), retry ? Math.min(0.7, temperature + 0.3) : temperature, maxTokens, retry === 0);
+        const raw = await callModel(apiKey, endpoint, model, options.messages, model === primary ? timeoutMs : Math.min(timeoutMs, 40_000), retry ? Math.min(0.7, temperature + 0.3) : temperature, maxTokens, retry === 0);
         let value: T;
         try { value = options.validate(raw); }
         catch (error) { throw new AiClientError(error instanceof Error ? error.message : "AI response failed validation.", "VALIDATION"); }

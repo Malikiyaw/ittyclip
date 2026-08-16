@@ -1,6 +1,7 @@
 import type { ClipLength } from "@/lib/types";
 import type { AiPromptSignals, AiTranscriptLine } from "@/lib/ai/prompt";
 import type { AiHighlightRaw } from "@/lib/ai/validate";
+import { aiHeaders, getAiKey } from "@/lib/ai/settings";
 
 export interface AiPayload {
   transcript: AiTranscriptLine[];
@@ -53,7 +54,8 @@ export interface AiResponse {
 
 /**
  * Calls the local AI proxy. The API key never leaves the server — the
- * browser only ever talks to `/api/ai/highlights`.
+ * browser only ever talks to `/api/ai/highlights`. A key saved in the
+ * browser's AI settings is forwarded so any deployment works with it.
  */
 export async function requestAiHighlights(
   payload: AiPayload,
@@ -62,11 +64,10 @@ export async function requestAiHighlights(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
 
-  try {
-    onStage?.(0.3, "AI is reading your transcript…");
+  const attempt = async (): Promise<AiResponse> => {
     const res = await fetch("/api/ai/highlights", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: aiHeaders(),
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -80,8 +81,27 @@ export async function requestAiHighlights(
     if (!data || !Array.isArray(data.highlights)) {
       throw new Error("AI returned an unreadable response.");
     }
-    onStage?.(0.9, "Formatting results…");
     return { model: data.model ?? "unknown", highlights: data.highlights, count: data.highlights.length };
+  };
+
+  try {
+    onStage?.(0.3, "AI is reading your transcript…");
+    try {
+      const result = await attempt();
+      onStage?.(0.9, "Formatting results…");
+      return result;
+    } catch (err) {
+      // Transient failures (502/503/504 — including Vercel function timeouts)
+      // get one retry when a key is set; the server caches successes, so the
+      // retry is usually fast.
+      if (err instanceof Error && getAiKey() && /HTTP (502|503|504)/.test(err.message)) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const result = await attempt();
+        onStage?.(0.9, "Formatting results…");
+        return result;
+      }
+      throw err;
+    }
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error("AI request timed out after 120 seconds.");

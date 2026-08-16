@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useStudio } from "@/store/studio";
+import { aiHeaders } from "@/lib/ai/settings";
 
 type Op = "hooks" | "titles" | "description" | "hashtags" | "platform";
 type Platform = "tiktok" | "youtube" | "instagram";
 type Result = { items?: string[]; description?: string; keywords?: string[]; hashtags?: string[]; hook?: string; title?: string; cta?: string };
 
 async function callAI(operation: Op, context: unknown, platform: Platform) {
-  const res = await fetch("/api/ai/phase4", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, platform, context }) });
+  const res = await fetch("/api/ai/phase4", { method: "POST", headers: aiHeaders(), body: JSON.stringify({ operation, platform, context }) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "AI request failed");
   return data as { value: Result };

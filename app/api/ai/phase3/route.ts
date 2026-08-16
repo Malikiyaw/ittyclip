@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runPhase3, sanitizePhase3Context, type Phase3Operation } from "@/lib/ai/phase3";
-import { AiClientError } from "@/lib/ai/server-client";
+import { AiClientError, readAiRequestConfig } from "@/lib/ai/server-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const operation = raw.operation as Phase3Operation;
     if (!OPS.includes(operation)) return NextResponse.json({ error: "Unsupported Phase 3 operation." }, { status: 400 });
     const context = sanitizePhase3Context(raw.context);
-    const result = await runPhase3(operation, context);
+    const result = await runPhase3(operation, context, readAiRequestConfig(req));
     return NextResponse.json({ operation, ...result });
   } catch (error) {
     if (error instanceof AiClientError) {

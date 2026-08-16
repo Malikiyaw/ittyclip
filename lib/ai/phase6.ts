@@ -1,4 +1,4 @@
-import { runAi } from "@/lib/ai/server-client";
+import { runAi, type AiRequestConfig } from "@/lib/ai/server-client";
 import type { CaptionStyleKey, AspectKey } from "@/lib/types";
 
 export type Phase6ActionType = "set_aspect" | "set_caption_style" | "set_zoom" | "trim_active_clip" | "add_clip";
@@ -24,6 +24,28 @@ export interface Phase6Action {
 
 const STYLES: CaptionStyleKey[] = ["classic", "pop", "karaoke", "neon", "minimal", "bold"];
 const ASPECTS: AspectKey[] = ["9:16", "1:1", "4:5", "16:9"];
+const STYLE_SYNONYMS: Record<string, CaptionStyleKey> = {
+  modern_bold: "bold",
+  punchy: "pop",
+  "punchy-pop": "pop",
+  clean: "minimal",
+  clean_minimal: "minimal",
+  bold_modern: "bold",
+  glowing: "neon",
+  neon_glow: "neon",
+  animated: "pop",
+  classic_bold: "bold",
+  fun: "pop",
+  elegant: "minimal",
+  strong: "bold",
+};
+
+function resolveStyle(value: unknown): CaptionStyleKey | null {
+  if (typeof value !== "string") return null;
+  const style = value.trim().toLowerCase();
+  if (STYLES.includes(style as CaptionStyleKey)) return style as CaptionStyleKey;
+  return STYLE_SYNONYMS[style] ?? null;
+}
 
 function finite(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
 function object(value: unknown): Record<string, unknown> {
@@ -78,43 +100,45 @@ function validateAction(raw: unknown, ctx: Phase6Context, index: number): Phase6
   const id = text(o.id, 50) || `action-${index + 1}`;
   const title = text(o.title, 100) || type.replaceAll("_", " ");
   const reason = text(o.reason, 240) || "Suggested by AI from the current project context.";
+  const p = o.params && typeof o.params === "object" && !Array.isArray(o.params) ? o.params as Record<string, unknown> : o;
   let params: Record<string, unknown>;
   if (type === "set_aspect") {
-    const aspect = o.aspect as AspectKey;
+    const aspect = p.aspect as AspectKey;
     if (!ASPECTS.includes(aspect)) return null;
     params = { aspect };
   } else if (type === "set_caption_style") {
-    const style = o.style as CaptionStyleKey;
-    if (!STYLES.includes(style)) return null;
+    const style = resolveStyle(p.style);
+    if (!style) return null;
     params = { style };
   } else if (type === "set_zoom") {
-    const zoom = Number(o.zoom);
+    const zoom = Number(p.zoom ?? p.level);
     if (!finite(zoom) || zoom < 10 || zoom > 200) return null;
     params = { zoom: Math.round(zoom) };
   } else {
-    const start = Number(o.start), end = Number(o.end);
+    const start = Number(p.start), end = Number(p.end);
     const lo = type === "trim_active_clip" ? ctx.activeClip?.start : 0;
     const hi = type === "trim_active_clip" ? ctx.activeClip?.end : ctx.duration;
     if (!finite(start) || !finite(end) || lo === undefined || hi === undefined || end <= start || start < lo || end > hi) return null;
     if (end - start < 0.05) return null;
     if (type === "add_clip" && ctx.clips.length >= 100) return null;
-    params = { start, end, label: text(o.label, 100) || "AI clip" };
+    params = { start, end, label: text(p.label, 100) || "AI clip" };
   }
   return { id, type, title, reason, params };
 }
 
-export async function runPhase6(ctx: Phase6Context, request: string) {
+export async function runPhase6(ctx: Phase6Context, request: string, ai?: AiRequestConfig) {
   const cleanRequest = request.trim().slice(0, 1000);
   if (!cleanRequest) throw new Error("Tell Itty what you want changed.");
   const context = `DURATION: ${ctx.duration.toFixed(2)}s\nPLAYHEAD: ${ctx.playhead.toFixed(2)}s\nACTIVE CLIP: ${ctx.activeClip ? `${ctx.activeClip.start.toFixed(2)}-${ctx.activeClip.end.toFixed(2)}s (${ctx.activeClip.label})` : "none"}\nCURRENT ASPECT: ${ctx.aspect}\nCURRENT CAPTION STYLE: ${ctx.captionStyle}\nCURRENT ZOOM: ${ctx.zoom}\nTRANSCRIPT:\n${ctx.transcript.slice(0, 2500).map((x) => `[${x.start.toFixed(2)}-${x.end.toFixed(2)}] ${x.text}`).join("\n") || "(none)"}`;
   return runAi({
     operation: "phase6_assistant",
     cacheKey: `p6:${JSON.stringify(ctx)}:${cleanRequest.toLowerCase()}`,
+    ...(ai ?? {}),
     cacheTtlMs: 10 * 60_000,
     temperature: 0.15,
     maxTokens: 3000,
     messages: [
-      { role: "system", content: "You are IttyClip's editing assistant. Convert the user's request into a small, safe, reviewable edit plan. Never invent video facts. Only use these actions: set_aspect, set_caption_style, set_zoom, trim_active_clip, add_clip. Do not output actions that delete data, publish content, call external services, or modify files. If the request cannot be safely represented, return an empty actions array and explain. Return JSON only: {summary:string, actions:[{id,type,title,reason,params}]}" },
+      { role: "system", content: "You are IttyClip's editing assistant. Convert the user's request into a small, safe, reviewable edit plan. Never invent video facts. Only use these actions: set_aspect, set_caption_style, set_zoom, trim_active_clip, add_clip. Valid caption styles: classic, pop, karaoke, neon, minimal, bold. Valid aspects: 9:16, 1:1, 4:5, 16:9. Action params must use exactly these keys: set_aspect -> {aspect}, set_caption_style -> {style}, set_zoom -> {zoom} (10-200), trim_active_clip -> {start,end}, add_clip -> {start,end,label}. Do not output actions that delete data, publish content, call external services, or modify files. If the request cannot be safely represented, return an empty actions array and explain. Return JSON only: {summary:string, actions:[{id:string,type,title,reason,params}]}" },
       { role: "user", content: `${context}\n\nUSER REQUEST:\n${cleanRequest}\n\nPrefer the minimum number of actions needed. A trim_active_clip requires an active clip. Keep all timestamps inside valid bounds.` }
     ],
     validate: (raw) => {

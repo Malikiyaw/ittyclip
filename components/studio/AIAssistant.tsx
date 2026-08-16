@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useStudio } from "@/store/studio";
 import type { AspectKey, CaptionStyleKey, Moment } from "@/lib/types";
 import type { Phase6Action } from "@/lib/ai/phase6";
+import { aiHeaders } from "@/lib/ai/settings";
 
 type Plan = { summary: string; actions: Phase6Action[]; model?: string; cached?: boolean };
 
@@ -47,7 +48,7 @@ export function AIAssistant() {
     try {
       const res = await fetch("/api/ai/phase6", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: aiHeaders(),
         body: JSON.stringify({
           request: text,
           context: {

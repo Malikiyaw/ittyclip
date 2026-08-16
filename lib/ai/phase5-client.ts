@@ -1,9 +1,10 @@
 import type { Phase5Context, Phase5Operation } from "@/lib/ai/phase5";
+import { aiHeaders } from "@/lib/ai/settings";
 
 export async function requestPhase5<T>(operation: Phase5Operation, context: Phase5Context, extra = "", signal?: AbortSignal): Promise<T> {
   const response = await fetch("/api/ai/phase5", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: aiHeaders(),
     body: JSON.stringify({ operation, context, extra }),
     signal,
   });

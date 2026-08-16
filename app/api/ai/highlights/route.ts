@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { buildPrompt, type AiPromptSignals, type AiTranscriptLine } from "@/lib/ai/prompt";
 import { validateAiHighlights, type AiHighlightRaw } from "@/lib/ai/validate";
 import { CLIP_LENGTHS, type ClipLength } from "@/lib/types";
-import { runAi, AiClientError } from "@/lib/ai/server-client";
+import { runAi, AiClientError, readAiRequestConfig } from "@/lib/ai/server-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -64,6 +64,7 @@ export async function POST(req: Request) {
     const { system, user } = buildPrompt({ transcript, signals, clipLength: raw.clipLength as ClipLength, count });
     const result = await runAi<AiHighlightRaw[]>({
       operation: "highlights",
+      ...readAiRequestConfig(req),
       cacheKey: `highlights:${duration}:${raw.clipLength}:${count}:${JSON.stringify(transcript)}:${JSON.stringify(signals)}`,
       cacheTtlMs: 30 * 60_000,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],

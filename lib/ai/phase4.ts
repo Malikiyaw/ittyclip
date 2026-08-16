@@ -1,4 +1,4 @@
-import { runAi } from "@/lib/ai/server-client";
+import { runAi, type AiRequestConfig } from "@/lib/ai/server-client";
 
 export type Phase4Operation = "hooks" | "titles" | "description" | "hashtags" | "platform";
 export type Phase4Platform = "tiktok" | "youtube" | "instagram";
@@ -48,12 +48,12 @@ function transcript(ctx: Phase4Context) {
 
 export function sanitizePhase4Context(raw: unknown) { return cleanContext(raw); }
 
-export async function runPhase4(operation: Phase4Operation, ctx: Phase4Context, platform: Phase4Platform = "tiktok") {
+export async function runPhase4(operation: Phase4Operation, ctx: Phase4Context, platform: Phase4Platform = "tiktok", ai?: AiRequestConfig) {
   const base = `VIDEO DURATION: ${ctx.duration.toFixed(2)}s\nSELECTED CLIP: ${ctx.selectedClip ? `${ctx.selectedClip.start.toFixed(2)}-${ctx.selectedClip.end.toFixed(2)}s` : "none"}\nTRANSCRIPT:\n${transcript(ctx)}`;
   const system = "You are IttyClip's short-form content strategist. Use only facts supported by the transcript. Never invent people, claims, statistics, events, products, or quotes. Return JSON only. Avoid spammy keyword stuffing and misleading claims.";
   if (operation === "hooks" || operation === "titles") {
     const key = operation === "hooks" ? "hooks" : "titles";
-    return runAi({ operation: `phase4:${operation}`, cacheKey: `p4:${operation}:${JSON.stringify(ctx)}`, cacheTtlMs: 30 * 60_000, messages: [
+    return runAi({ operation: `phase4:${operation}`, cacheKey: `p4:${operation}:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 30 * 60_000, messages: [
       { role: "system", content: `${system} Generate strong ${key} for a short-form video. Keep them natural, specific and concise.` },
       { role: "user", content: `${base}\nReturn {"items":[string]}. Return 10 distinct options, each under 120 characters.` },
     ], validate: (raw) => {
@@ -63,7 +63,7 @@ export async function runPhase4(operation: Phase4Operation, ctx: Phase4Context, 
     } });
   }
   if (operation === "description") {
-    return runAi({ operation: "phase4:description", cacheKey: `p4:description:${JSON.stringify(ctx)}`, cacheTtlMs: 30 * 60_000, messages: [
+    return runAi({ operation: "phase4:description", cacheKey: `p4:description:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 30 * 60_000, messages: [
       { role: "system", content: `${system} Write a concise platform-ready description. Do not add unsupported facts.` },
       { role: "user", content: `${base}\nReturn {"description":string,"keywords":[string]}. Description must be under 800 characters.` },
     ], validate: (raw) => {
@@ -73,7 +73,7 @@ export async function runPhase4(operation: Phase4Operation, ctx: Phase4Context, 
     } });
   }
   if (operation === "hashtags") {
-    return runAi({ operation: "phase4:hashtags", cacheKey: `p4:hashtags:${JSON.stringify(ctx)}:${platform}`, cacheTtlMs: 30 * 60_000, messages: [
+    return runAi({ operation: "phase4:hashtags", cacheKey: `p4:hashtags:${JSON.stringify(ctx)}:${platform}`, ...(ai ?? {}), cacheTtlMs: 30 * 60_000, messages: [
       { role: "system", content: `${system} Generate relevant hashtags for ${platform}. Prefer a small mix of specific and broad tags. Do not use unrelated trending tags.` },
       { role: "user", content: `${base}\nReturn {"hashtags":[string]}. Return 8-15 hashtags without the # symbol.` },
     ], validate: (raw) => {
@@ -82,7 +82,7 @@ export async function runPhase4(operation: Phase4Operation, ctx: Phase4Context, 
       return { hashtags: [...new Set(hashtags)].slice(0, 15) };
     } });
   }
-  return runAi({ operation: "phase4:platform", cacheKey: `p4:platform:${platform}:${JSON.stringify(ctx)}`, cacheTtlMs: 30 * 60_000, messages: [
+  return runAi({ operation: "phase4:platform", cacheKey: `p4:platform:${platform}:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 30 * 60_000, messages: [
     { role: "system", content: `${system} Create a platform-specific content pack for ${platform}. Optimize wording and length for the platform without promising reach or inventing facts.` },
     { role: "user", content: `${base}\nReturn {"hook":string,"title":string,"description":string,"hashtags":[string],"cta":string}. Keep hook/title under 120 chars, description under 800 chars, CTA under 100 chars.` },
   ], validate: (raw) => {

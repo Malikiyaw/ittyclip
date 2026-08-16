@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runPhase4, sanitizePhase4Context, type Phase4Operation, type Phase4Platform } from "@/lib/ai/phase4";
-import { AiClientError } from "@/lib/ai/server-client";
+import { AiClientError, readAiRequestConfig } from "@/lib/ai/server-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const platform = (PLATFORMS.includes(raw.platform as Phase4Platform) ? raw.platform : "tiktok") as Phase4Platform;
     if (!OPERATIONS.includes(operation)) return NextResponse.json({ error: "Unsupported Phase 4 operation." }, { status: 400 });
     const context = sanitizePhase4Context(raw.context);
-    const result = await runPhase4(operation, context, platform);
+    const result = await runPhase4(operation, context, platform, readAiRequestConfig(req));
     return NextResponse.json({ operation, platform, ...result });
   } catch (error) {
     if (error instanceof AiClientError) {

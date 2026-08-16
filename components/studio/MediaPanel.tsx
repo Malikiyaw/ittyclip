@@ -10,6 +10,7 @@ import { WHISPER_MODELS, type WhisperModelKey } from "@/lib/whisper";
 import { extractThumb } from "@/lib/thumbnails";
 import { contentIntelligence } from "@/lib/content";
 import { REFRAME_SCALE_MAX, REFRAME_SCALE_MIN } from "@/lib/reframe/state";
+import { AiSettingsPanel } from "@/components/studio/AiSettingsPanel";
 
 type Tab = "ai" | "edit" | "captions" | "reframe" | "export";
 
@@ -415,6 +416,8 @@ function AITab({ onExport }: { onExport: () => void }) {
 
   return (
     <div className="flex flex-col gap-2.5 p-3">
+      <AiSettingsPanel />
+
       {hero && (
         <HeroHighlightCard
           m={hero}

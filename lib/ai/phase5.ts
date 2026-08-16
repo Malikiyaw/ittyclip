@@ -1,4 +1,4 @@
-import { runAi } from "@/lib/ai/server-client";
+import { runAi, type AiRequestConfig } from "@/lib/ai/server-client";
 
 export type Phase5Operation = "reframe" | "audio" | "scenes" | "preflight";
 export type AspectKey = "9:16" | "1:1" | "16:9" | "4:5";
@@ -96,12 +96,12 @@ function object(value: unknown): Record<string, unknown> { if (!value || typeof 
 function string(value: unknown, max = 300) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 function score(value: unknown) { return clamp(Math.round(Number(value) || 0), 0, 100); }
 
-export async function runPhase5(operation: Phase5Operation, ctx: Phase5Context, extra = "") {
+export async function runPhase5(operation: Phase5Operation, ctx: Phase5Context, extra = "", ai?: AiRequestConfig) {
   const system = "You are IttyClip's production video-editing intelligence. Use only supplied evidence. Never invent visual facts, speech, people, events or audio measurements. Return JSON only. Suggestions must be safe, reversible and grounded in the supplied data.";
   const base = `${text(ctx)}\n${extra}`;
 
   if (operation === "reframe") return runAi({
-    operation, cacheKey: `p5:reframe:${JSON.stringify(ctx)}`, cacheTtlMs: 20 * 60_000,
+    operation, cacheKey: `p5:reframe:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 20 * 60_000,
     messages: [{ role: "system", content: `${system} Recommend framing only. Do not claim a subject exists unless visual events support it.` }, { role: "user", content: `${base}\nReturn {"recommendedAspect":"9:16|1:1|16:9|4:5","mode":"tracked|center","focusX":number,"focusY":number,"scale":number,"reason":string,"confidence":0-100}. focusX/focusY are normalized 0..1; scale 1..2.` }],
     validate: (raw) => {
       const o = object(raw); const recommendedAspect = ASPECTS.includes(o.recommendedAspect as AspectKey) ? o.recommendedAspect as AspectKey : ctx.aspect;
@@ -113,7 +113,7 @@ export async function runPhase5(operation: Phase5Operation, ctx: Phase5Context, 
   });
 
   if (operation === "audio") return runAi({
-    operation, cacheKey: `p5:audio:${JSON.stringify(ctx)}`, cacheTtlMs: 15 * 60_000,
+    operation, cacheKey: `p5:audio:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 15 * 60_000,
     messages: [{ role: "system", content: `${system} Recommend audio processing from speech, silence and energy signals. Do not fabricate measured loudness.` }, { role: "user", content: `${base}\nReturn {"profile":"clean_speech|balanced|music_focused|dialogue|none","noiseReduction":0-100,"speechGainDb":number,"musicGainDb":number,"removeSilence":boolean,"reason":string,"confidence":0-100}. Keep gains between -12 and 12 dB.` }],
     validate: (raw) => {
       const o = object(raw); const profiles = ["clean_speech", "balanced", "music_focused", "dialogue", "none"] as const;
@@ -124,7 +124,7 @@ export async function runPhase5(operation: Phase5Operation, ctx: Phase5Context, 
   });
 
   if (operation === "scenes") return runAi({
-    operation, cacheKey: `p5:scenes:${JSON.stringify(ctx)}`, cacheTtlMs: 30 * 60_000,
+    operation, cacheKey: `p5:scenes:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 30 * 60_000,
     messages: [{ role: "system", content: `${system} Classify supplied visual events and transcript windows. Only create scene boundaries supported by supplied events or clear transcript changes.` }, { role: "user", content: `${base}\nReturn {"scenes":[{"start":number,"end":number,"type":"talking_head|gameplay|screen|reaction|conversation|tutorial|broll|unknown","label":string,"confidence":0-100}]}.` }],
     validate: (raw) => {
       const o = object(raw); if (!Array.isArray(o.scenes)) throw new Error("invalid scenes");
@@ -134,7 +134,7 @@ export async function runPhase5(operation: Phase5Operation, ctx: Phase5Context, 
   });
 
   return runAi({
-    operation, cacheKey: `p5:preflight:${JSON.stringify(ctx)}`, cacheTtlMs: 10 * 60_000,
+    operation, cacheKey: `p5:preflight:${JSON.stringify(ctx)}`, ...(ai ?? {}), cacheTtlMs: 10 * 60_000,
     messages: [{ role: "system", content: `${system} Perform an editor preflight. Distinguish evidence-backed warnings from unavailable checks.` }, { role: "user", content: `${base}\nReturn {"score":0-100,"checks":[{"key":string,"status":"pass|warning|error|unknown","message":string,"fix":"string"}],"autoFixes":[{"key":string,"action":"string","reason":"string"}]}.` }],
     validate: (raw) => {
       const o=object(raw); if(!Array.isArray(o.checks)) throw new Error("invalid preflight checks");

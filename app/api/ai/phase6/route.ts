@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runPhase6, sanitizePhase6Context } from "@/lib/ai/phase6";
-import { AiClientError } from "@/lib/ai/server-client";
+import { AiClientError, readAiRequestConfig } from "@/lib/ai/server-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const raw = await req.json() as { request?: unknown; context?: unknown };
     if (typeof raw.request !== "string" || !raw.request.trim()) return NextResponse.json({ error: "request is required" }, { status: 400 });
     const context = sanitizePhase6Context(raw.context);
-    const result = await runPhase6(context, raw.request);
+    const result = await runPhase6(context, raw.request, readAiRequestConfig(req));
     return NextResponse.json({ ...result.value, model: result.model, requestId: result.requestId, cached: result.cached, attempts: result.attempts });
   } catch (error) {
     if (error instanceof AiClientError) {

@@ -1,4 +1,4 @@
-import { runAi } from "@/lib/ai/server-client";
+import { runAi, type AiRequestConfig } from "@/lib/ai/server-client";
 import type { AiTranscriptLine } from "@/lib/ai/prompt";
 import type { CaptionStyleKey, Word } from "@/lib/types";
 
@@ -60,12 +60,13 @@ function validateSegments(raw: unknown, ctx: Phase3Context) {
   return { segments };
 }
 
-export async function runPhase3(operation: Phase3Operation, ctx: Phase3Context) {
+export async function runPhase3(operation: Phase3Operation, ctx: Phase3Context, ai?: AiRequestConfig) {
   const base = "You are IttyClip's caption intelligence. Use only supplied transcript evidence. Never invent words or timestamps. Return JSON only.";
   if (operation === "caption-intelligence") {
     return runAi({
       operation,
       cacheKey: `p3:caption-intelligence:${JSON.stringify(ctx)}`,
+      ...(ai ?? {}),
       cacheTtlMs: 30 * 60_000,
       temperature: 0.1,
       maxTokens: 5000,
@@ -79,6 +80,7 @@ export async function runPhase3(operation: Phase3Operation, ctx: Phase3Context) 
   return runAi({
     operation,
     cacheKey: `p3:caption-style:${JSON.stringify(ctx)}`,
+    ...(ai ?? {}),
     cacheTtlMs: 30 * 60_000,
     temperature: 0.15,
     maxTokens: 1200,
