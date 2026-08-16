@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useStudio } from "@/store/studio";
-import { presetFor } from "@/lib/captions/presets";
 import type { AspectKey, CaptionStyleKey, Moment } from "@/lib/types";
 import type { Phase6Action } from "@/lib/ai/phase6";
 
