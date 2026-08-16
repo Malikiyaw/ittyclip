@@ -38,6 +38,7 @@ export function AIAssistant() {
   const [applied, setApplied] = useState<Record<string, boolean>>({});
 
   if (!media) return null;
+  const duration = media.duration;
 
   async function ask(prompt = request) {
     const text = prompt.trim();
@@ -50,7 +51,7 @@ export function AIAssistant() {
         body: JSON.stringify({
           request: text,
           context: {
-            duration: media.duration,
+            duration,
             playhead,
             activeClip: activeClip ? { start: activeClip.start, end: activeClip.end, label: activeClip.label } : null,
             clips: clips.map((c) => ({ start: c.start, end: c.end, label: c.label })),
@@ -81,7 +82,7 @@ export function AIAssistant() {
         updateClip(activeClipId, { start: Number(p.start), end: Number(p.end) });
       } else if (action.type === "add_clip") {
         const start = Number(p.start), end = Number(p.end);
-        const moment: Moment = { id: "ai", start, end, score: 0, label: typeof p.label === "string" ? p.label : "AI clip" };
+        const moment: Moment = { id: `ai-${Date.now()}`, start, end, score: 0, label: typeof p.label === "string" ? p.label : "AI clip" };
         addClip(moment);
       }
       setApplied((s) => ({ ...s, [action.id]: true }));
