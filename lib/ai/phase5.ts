@@ -10,7 +10,7 @@ export interface Phase5Context {
   signals?: {
     speech?: { start: number; end: number; score: number }[];
     energy?: { start: number; end: number; score: number }[];
-    silence?: { start: number; end: number; score?: number }[];
+    silence?: { start: number; end: number; score: number }[];
     visualEvents?: { start: number; end: number; label: string; confidence?: number }[];
   };
   selectedClip?: { start: number; end: number };
@@ -39,26 +39,50 @@ export function sanitizePhase5Context(raw: unknown): Phase5Context {
     const start = clamp(Number(x.start), 0, duration), end = clamp(Number(x.end), 0, duration);
     if (finite(start) && finite(end) && end > start) selectedClip = { start, end };
   }
+
   const rawSignals = o.signals && typeof o.signals === "object" ? o.signals as Record<string, unknown> : {};
-  const ranges = (value: unknown, label: string) => Array.isArray(value) ? value.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const x = item as Record<string, unknown>;
-    const start = clamp(Number(x.start), 0, duration), end = clamp(Number(x.end), 0, duration);
-    const score = x.score === undefined ? 1 : clamp(Number(x.score), 0, 1);
-    if (!finite(start) || !finite(end) || end <= start) return [];
-    if (label === "visual") return typeof x.label === "string" && x.label.trim() ? [{ start, end, label: x.label.trim().slice(0, 100), confidence: score }] : [];
-    return [{ start, end, score }];
-  }).slice(0, 3000) : [];
+  type RangeSignal = { start: number; end: number; score: number };
+  type VisualSignal = { start: number; end: number; label: string; confidence: number };
+
+  const numericRanges = (value: unknown): RangeSignal[] => {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item): RangeSignal[] => {
+      if (!item || typeof item !== "object") return [];
+      const x = item as Record<string, unknown>;
+      const start = clamp(Number(x.start), 0, duration);
+      const end = clamp(Number(x.end), 0, duration);
+      const score = x.score === undefined ? 1 : clamp(Number(x.score), 0, 1);
+      if (!finite(start) || !finite(end) || !finite(score) || end <= start) return [];
+      return [{ start, end, score }];
+    }).slice(0, 3000);
+  };
+
+  const visualRanges = (value: unknown): VisualSignal[] => {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item): VisualSignal[] => {
+      if (!item || typeof item !== "object") return [];
+      const x = item as Record<string, unknown>;
+      const start = clamp(Number(x.start), 0, duration);
+      const end = clamp(Number(x.end), 0, duration);
+      const confidence = x.confidence === undefined
+        ? (x.score === undefined ? 1 : clamp(Number(x.score), 0, 1))
+        : clamp(Number(x.confidence), 0, 1);
+      const label = typeof x.label === "string" ? x.label.trim().slice(0, 100) : "";
+      if (!finite(start) || !finite(end) || !finite(confidence) || end <= start || !label) return [];
+      return [{ start, end, label, confidence }];
+    }).slice(0, 3000);
+  };
+
   return {
     duration,
     aspect,
     transcript,
     selectedClip,
     signals: {
-      speech: ranges(rawSignals.speech, "speech"),
-      energy: ranges(rawSignals.energy, "energy"),
-      silence: ranges(rawSignals.silence, "silence"),
-      visualEvents: ranges(rawSignals.visualEvents, "visual"),
+      speech: numericRanges(rawSignals.speech),
+      energy: numericRanges(rawSignals.energy),
+      silence: numericRanges(rawSignals.silence),
+      visualEvents: visualRanges(rawSignals.visualEvents),
     },
   };
 }
@@ -95,7 +119,7 @@ export async function runPhase5(operation: Phase5Operation, ctx: Phase5Context, 
       const o = object(raw); const profiles = ["clean_speech", "balanced", "music_focused", "dialogue", "none"] as const;
       const profile = profiles.includes(o.profile as typeof profiles[number]) ? o.profile as typeof profiles[number] : "balanced";
       const noiseReduction = score(o.noiseReduction), speechGainDb = clamp(Number(o.speechGainDb) || 0, -12, 12), musicGainDb = clamp(Number(o.musicGainDb) || 0, -12, 12);
-      return { profile, noiseReduction, speechGainDb, musicGainDb, removeSilence: Boolean(o.removeSilence), reason: string(o.reason, 300), confidence: score(o.confidence) };
+      return { profile, noiseReduction, speechGainDb, musicGainDb, removeSilence: typeof o.removeSilence === "boolean" ? o.removeSilence : false, reason: string(o.reason, 300), confidence: score(o.confidence) };
     }
   });
 
