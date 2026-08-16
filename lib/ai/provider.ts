@@ -1,9 +1,8 @@
-import type { CaptionLine, ClipLength } from "@/lib/types";
+import type { CaptionLine, ClipLength, VisualEvent } from "@/lib/types";
 import { uid } from "@/lib/types";
 import type { AnalysisInput, RankedHighlight } from "@/lib/analysis/types";
 import { HighlightAnalyzerBase } from "@/lib/analysis/provider";
 import { computeGlobalStats, scoreWindow } from "@/lib/analysis/scoring";
-import { pickReason } from "@/lib/analysis/reasons";
 import { reasonSpec } from "@/lib/analysis/config";
 import { clamp } from "@/lib/analysis/util";
 import { trimTranscript, requestAiHighlights } from "@/lib/ai/client";
@@ -12,6 +11,7 @@ import { validateAiHighlights } from "@/lib/ai/validate";
 type AiInput = AnalysisInput & {
   speech: { start: number; end: number }[];
   energy: { time: number; value: number }[];
+  visualEvents?: VisualEvent[];
 };
 
 function excerpt(start: number, end: number, transcript: CaptionLine[] | null): string | null {
@@ -25,10 +25,6 @@ function excerpt(start: number, end: number, transcript: CaptionLine[] | null): 
   return text ? text.slice(0, 220) : null;
 }
 
-/**
- * LLM-backed highlight analyzer. Implements the same interface as the local
- * engine; the store falls back to `LocalAnalyzer` on any failure.
- */
 export class AiHighlightAnalyzer extends HighlightAnalyzerBase {
   readonly name = "ai";
 
@@ -45,6 +41,7 @@ export class AiHighlightAnalyzer extends HighlightAnalyzerBase {
           silence: input.silence,
           speech: input.speech,
           energy: input.energy.slice(0, 120),
+          visualEvents: input.visualEvents?.filter((e) => e.change >= 0.12 || e.face).slice(0, 120),
         },
         clipLength: input.clipLength,
         count: input.maxResults,
@@ -60,8 +57,6 @@ export class AiHighlightAnalyzer extends HighlightAnalyzerBase {
       throw new Error(reason ?? "AI returned no usable highlights.");
     }
 
-    // Recompute the breakdown locally so the UI's score bars reflect real
-    // audio signals for the windows the model chose.
     const global = computeGlobalStats(input.envelope);
     return highlights.slice(0, input.maxResults).map((h, i) => {
       const breakdown = scoreWindow({
@@ -102,12 +97,12 @@ export interface AiAnalysisRequest {
   silence: { start: number; end: number }[];
   speech: { start: number; end: number }[];
   energy: { time: number; value: number }[];
+  visualEvents?: VisualEvent[];
   clipLength: ClipLength;
   maxResults: number;
   onProgress?: (p: number, stage: string) => void;
 }
 
-/** Convenience entry point used by the store. */
 export async function analyzeWithAi(req: AiAnalysisRequest): Promise<RankedHighlight[]> {
   const input: AiInput = {
     envelope: req.envelope,
@@ -116,6 +111,7 @@ export async function analyzeWithAi(req: AiAnalysisRequest): Promise<RankedHighl
     silence: req.silence,
     speech: req.speech,
     energy: req.energy,
+    visualEvents: req.visualEvents,
     transcript: req.transcript,
     clipLength: req.clipLength,
     maxResults: req.maxResults,
