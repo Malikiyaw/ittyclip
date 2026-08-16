@@ -24,7 +24,7 @@ export const CAPTION_PRESETS: Record<CaptionPresetKey, CaptionSettings> = {
     size: 0.95,
     weight: "normal",
     textColor: "#FFFFFF",
-    highlightColor: "#FFFFFF",
+    highlightColor: "#111111",
     position: "bottom",
     maxWidth: 0.9,
     stroke: false,
@@ -111,16 +111,11 @@ export function presetFor(key: CaptionPresetKey): CaptionSettings {
 /** Animation CSS class applied to the caption wrapper. */
 export function animationClass(animation: CaptionAnimation): string {
   switch (animation) {
-    case "pop":
-      return "s-caption-anim-pop";
-    case "fade":
-      return "s-caption-anim-fade";
-    case "slide-up":
-      return "s-caption-anim-slide";
-    case "word-pop":
-      return "s-caption-anim-word";
+    case "pop": return "s-caption-anim-pop";
+    case "fade": return "s-caption-anim-fade";
+    case "slide-up": return "s-caption-anim-slide";
+    case "word-pop": return "s-caption-anim-word";
     case "none":
-    default:
-      return "";
+    default: return "";
   }
 }
