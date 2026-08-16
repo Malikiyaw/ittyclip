@@ -194,7 +194,7 @@ export function Preview() {
             style={reframeTransform ?? undefined}
             playsInline
             controls={mobileControls}
-            preload="auto"
+            preload="metadata"
             onLoadedMetadata={() => setVideoError(null)}
             onCanPlay={() => setVideoError(null)}
             onError={handleVideoError}

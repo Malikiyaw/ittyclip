@@ -66,9 +66,11 @@ async function readVideoDuration(file: File, signal?: AbortSignal): Promise<numb
     return await new Promise<number>((resolve) => {
       const video = document.createElement("video");
       let settled = false;
+      const timer = setTimeout(() => finish(0), 10_000);
       const finish = (duration: number) => {
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
         video.removeAttribute("src");
         video.load();
         resolve(Number.isFinite(duration) && duration > 0 ? duration : 0);
@@ -129,6 +131,12 @@ async function makeMobileFallback(file: File, clipLength: ClipLength, signal?: A
   };
 }
 
+/**
+ * Main-thread analysis fallback. Kept exported for compatibility, but the
+ * ingest pipeline no longer calls it: decoding a long video's audio on the
+ * main thread can block the tab for tens of seconds and crash it. Prefer the
+ * worker path or the lightweight fallback (see `analyzeWithHighlights`).
+ */
 export async function analyzeFileMain(file: File, onProgress?: (p: number, stage?: string) => void, signal?: AbortSignal): Promise<AnalysisResult> {
   assertSafeForLocalAnalysis(file);
   const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -193,9 +201,17 @@ function analyzeWithWorker(file: File, clipLength: ClipLength, maxResults: numbe
   });
 }
 
+/**
+ * How long the whole analysis pipeline may take before it degrades to a
+ * lightweight result. Guards against a hung worker or a video seek that
+ * never resolves, so the Studio always finishes instead of blocking.
+ */
+const ANALYSIS_WATCHDOG_MS = 120_000;
+
 export async function analyzeWithHighlights(file: File, clipLength: ClipLength, maxResults: number, onProgress?: (p: number, stage?: string) => void, signal?: AbortSignal): Promise<AnalyzePayload | null> {
   assertSafeForLocalAnalysis(file);
   const constrained = isConstrainedDevice();
+  const startedAt = performance.now();
 
   // iOS Safari is unusually aggressive about terminating tabs during WebAudio
   // decoding. Keep the local path lightweight, but return usable timeline
@@ -207,27 +223,53 @@ export async function analyzeWithHighlights(file: File, clipLength: ClipLength, 
     return fallback;
   }
 
-  if (typeof Worker !== "undefined") {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const payload = await analyzeWithWorker(file, clipLength, maxResults, onProgress, signal);
-        onProgress?.(0.82, "Reading visual events");
-        const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, signal, (p) => onProgress?.(0.82 + p * 0.10, "Reading visual events"));
-        payload.analysis.visualEvents = visualEvents;
-        payload.highlights = runHighlightAnalysis({ ...payload.analysis, transcript: null, visualEvents, clipLength, maxResults });
-        return payload;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") throw err;
-        console.warn(`[ittyclip] analysis worker failed (attempt ${attempt + 1} of 2):`, err);
+  // Watchdog: aborts the worker/visual pass if it stalls, then degrades to a
+  // lightweight result instead of leaving the studio stuck forever.
+  const watchdog = new AbortController();
+  const onOuterAbort = () => watchdog.abort();
+  signal?.addEventListener("abort", onOuterAbort, { once: true });
+  const timer = setTimeout(() => watchdog.abort(), ANALYSIS_WATCHDOG_MS);
+
+  try {
+    if (typeof Worker !== "undefined") {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const payload = await analyzeWithWorker(file, clipLength, maxResults, onProgress, watchdog.signal);
+          onProgress?.(0.82, "Reading visual events");
+          const visualEvents = await analyzeVisualEvents(file, payload.analysis.duration, watchdog.signal, (p) => onProgress?.(0.82 + p * 0.1, "Reading visual events"));
+          payload.analysis.visualEvents = visualEvents;
+          payload.highlights = runHighlightAnalysis({ ...payload.analysis, transcript: null, visualEvents, clipLength, maxResults });
+          onProgress?.(1, "Ready for editing");
+          console.info(`[ittyclip] analysis finished via worker in ${Math.round(performance.now() - startedAt)} ms`);
+          return payload;
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") throw err;
+          console.warn(`[ittyclip] analysis worker failed (attempt ${attempt + 1} of 2):`, err);
+        }
       }
     }
-  }
 
-  const analysis = await analyzeFileMain(file, onProgress, signal);
-  const visualEvents = await analyzeVisualEvents(file, analysis.duration, signal);
-  analysis.visualEvents = visualEvents;
-  const highlights = runHighlightAnalysis({ ...analysis, transcript: null, visualEvents, clipLength, maxResults });
-  return { analysis, highlights };
+    // Never decode full audio on the main thread: a long video can produce
+    // gigabytes of PCM and Chrome will kill the tab. Fall back to a
+    // lightweight, browser-safe result instead.
+    console.warn("[ittyclip] worker analysis unavailable — using lightweight fallback");
+    onProgress?.(0.35, "Preparing lightweight highlights");
+    const fallback = await makeMobileFallback(file, clipLength, watchdog.signal);
+    onProgress?.(1, "Ready for editing");
+    return fallback;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      if (signal?.aborted) throw err; // user cancelled — not our watchdog
+      // Watchdog fired. Degrade instead of hanging.
+      console.warn("[ittyclip] analysis timed out — using lightweight fallback");
+      onProgress?.(0.5, "Finishing with a lightweight pass");
+      return makeMobileFallback(file, clipLength);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onOuterAbort);
+  }
 }
 
 export async function analyzeFile(file: File, onProgress?: (p: number, stage?: string) => void, signal?: AbortSignal): Promise<AnalysisResult> {

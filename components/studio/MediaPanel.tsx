@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStudio } from "@/store/studio";
 import { aiHooks, buildSrt, makeLines } from "@/lib/captions";
 import { CLIP_LENGTHS, fmtClock, type CaptionAnimation, type CaptionSettings, type ClipLength } from "@/lib/types";
@@ -38,7 +38,7 @@ function BreakdownBars({ breakdown }: { breakdown: RankedHighlight["breakdown"] 
   );
 }
 
-function HighlightCard({ m, rank }: { m: RankedHighlight; rank: number }) {
+function HighlightCard({ m, rank, autoThumb = true }: { m: RankedHighlight; rank: number; autoThumb?: boolean }) {
   const addClip = useStudio((s) => s.addClip);
   const setPlayhead = useStudio((s) => s.setPlayhead);
   const setPlaying = useStudio((s) => s.setPlaying);
@@ -46,20 +46,25 @@ function HighlightCard({ m, rank }: { m: RankedHighlight; rank: number }) {
   const clips = useStudio((s) => s.clips);
   const media = useStudio((s) => s.media);
   const aspect = useStudio((s) => s.aspect);
+  const analyzing = useStudio((s) => s.analyzing);
   const [thumb, setThumb] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+
+  const loadThumb = useCallback(() => {
+    if (!media || loadingRef.current) return;
+    loadingRef.current = true;
+    extractThumb({ url: media.url, time: m.start + 0.25, aspect })
+      .then((dataUrl) => setThumb(dataUrl))
+      .catch(() => {})
+      .finally(() => {
+        loadingRef.current = false;
+      });
+  }, [media, aspect, m.start]);
 
   useEffect(() => {
-    if (!media) return;
-    let alive = true;
-    extractThumb({ url: media.url, time: m.start + 0.25, aspect })
-      .then((dataUrl) => {
-        if (alive) setThumb(dataUrl);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [media, aspect, m.start, m.id]);
+    if (!media || analyzing || !autoThumb) return;
+    loadThumb();
+  }, [media, analyzing, autoThumb, m.start, m.id, loadThumb]);
 
   const added = useMemo(
     () => clips.some((c) => Math.abs(c.start - m.start) < 0.05 && Math.abs(c.end - m.end) < 0.05),
@@ -81,8 +86,17 @@ function HighlightCard({ m, rank }: { m: RankedHighlight; rank: number }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumb} alt={m.label} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full items-center justify-center font-mono text-[10px] text-white/25">
-            frame…
+          <div className="flex h-full flex-col items-center justify-center gap-2 font-mono text-[10px] text-white/25">
+            <span>frame…</span>
+            {!autoThumb && (
+              <button
+                type="button"
+                onClick={loadThumb}
+                className="rounded-full border border-white/20 px-2.5 py-1 text-[9px] text-white/50 transition-colors hover:border-white/50 hover:text-white"
+              >
+                Load thumbnail
+              </button>
+            )}
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
@@ -205,10 +219,11 @@ function HeroHighlightCard({
   const setPlaying = useStudio((s) => s.setPlaying);
   const showToast = useStudio((s) => s.showToast);
   const clips = useStudio((s) => s.clips);
+  const analyzing = useStudio((s) => s.analyzing);
   const [thumb, setThumb] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!media) return;
+    if (!media || analyzing) return;
     let alive = true;
     extractThumb({ url: media.url, time: m.start + 0.25, aspect })
       .then((dataUrl) => {
@@ -218,7 +233,7 @@ function HeroHighlightCard({
     return () => {
       alive = false;
     };
-  }, [media, aspect, m.start, m.id]);
+  }, [media, analyzing, aspect, m.start, m.id]);
 
   const added = useMemo(
     () => clips.some((c) => Math.abs(c.start - m.start) < 0.05 && Math.abs(c.end - m.end) < 0.05),
@@ -494,7 +509,7 @@ function AITab({ onExport }: { onExport: () => void }) {
       )}
 
       {rest.map((m) => (
-        <HighlightCard key={m.id} m={m} rank={m.rank} />
+        <HighlightCard key={m.id} m={m} rank={m.rank} autoThumb={m.rank <= 3} />
       ))}
     </div>
   );

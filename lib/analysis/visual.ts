@@ -1,8 +1,13 @@
 import type { VisualEvent } from "@/lib/types";
 
-const SAMPLE_LIMIT = 48;
+const MAX_SAMPLES = 20;
 const WIDTH = 160;
 const HEIGHT = 90;
+const SEEK_TIMEOUT_MS = 3_000;
+const GLOBAL_TIMEOUT_MS = 20_000;
+/** Skip the visual pass for huge files: seeking them decodes a lot of frames. */
+const MAX_VISUAL_BYTES = 80 * 1024 * 1024;
+const MAX_VISUAL_SECONDS = 60 * 60;
 
 function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -12,25 +17,29 @@ function seek(video: HTMLVideoElement, time: number, signal?: AbortSignal): Prom
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
     let done = false;
+    const timer = setTimeout(() => fail(new Error("Seek timed out — visual sampling skipped.")), SEEK_TIMEOUT_MS);
     const finish = () => {
       if (done) return;
       done = true;
+      clearTimeout(timer);
       video.removeEventListener("seeked", finish);
       video.removeEventListener("error", fail);
       signal?.removeEventListener("abort", abort);
       resolve();
     };
-    const fail = () => {
+    const fail = (err?: unknown) => {
       if (done) return;
       done = true;
+      clearTimeout(timer);
       video.removeEventListener("seeked", finish);
       video.removeEventListener("error", fail);
       signal?.removeEventListener("abort", abort);
-      reject(new Error("Could not seek video frame."));
+      reject(err instanceof Error ? err : new Error("Could not seek video frame."));
     };
     const abort = () => {
       if (done) return;
       done = true;
+      clearTimeout(timer);
       video.removeEventListener("seeked", finish);
       video.removeEventListener("error", fail);
       signal?.removeEventListener("abort", abort);
@@ -64,6 +73,10 @@ export async function analyzeVisualEvents(
   onProgress?: (p: number) => void
 ): Promise<VisualEvent[]> {
   if (typeof document === "undefined" || duration <= 0 || signal?.aborted) return [];
+  // Big files/long videos make seeking expensive on weak devices. The visual
+  // pass is a ranking boost, not a requirement — skip it rather than risk
+  // stalling the studio.
+  if (file.size > MAX_VISUAL_BYTES || duration > MAX_VISUAL_SECONDS) return [];
 
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -81,22 +94,30 @@ export async function analyzeVisualEvents(
   video.playsInline = true;
   video.src = url;
 
+  const startedAt = performance.now();
   try {
     await new Promise<void>((resolve, reject) => {
-      const onLoaded = () => resolve();
-      const onError = () => reject(new Error("Could not load video for visual analysis."));
+      const onLoaded = () => { clearTimeout(timer); resolve(); };
+      const onError = () => { clearTimeout(timer); reject(new Error("Could not load video for visual analysis.")); };
+      const timer = setTimeout(() => { video.removeEventListener("loadedmetadata", onLoaded); video.removeEventListener("error", onError); reject(new Error("Visual analysis timed out loading the video.")); }, 10_000);
       video.addEventListener("loadedmetadata", onLoaded, { once: true });
       video.addEventListener("error", onError, { once: true });
     });
 
-    const count = Math.max(2, Math.min(SAMPLE_LIMIT, Math.ceil(duration / 2)));
+    const count = Math.max(2, Math.min(MAX_SAMPLES, Math.ceil(duration / 2)));
     const events: VisualEvent[] = [];
     let previous: Uint8ClampedArray | null = null;
 
     for (let i = 0; i < count; i++) {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       const time = duration * (i / Math.max(1, count - 1));
-      await seek(video, time, signal);
+      try {
+        await seek(video, time, signal);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") throw err;
+        // A stalled seek will stall every later one too — keep what we have.
+        break;
+      }
       ctx.drawImage(video, 0, 0, WIDTH, HEIGHT);
       const pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
       const change = previous ? averageDifference(previous, pixels) : 0;
@@ -105,6 +126,7 @@ export async function analyzeVisualEvents(
       onProgress?.((i + 1) / count);
       // Yield between seeks so the Studio stays responsive on iOS/Safari.
       await wait(0);
+      if (performance.now() - startedAt > GLOBAL_TIMEOUT_MS) break;
     }
 
     return events;

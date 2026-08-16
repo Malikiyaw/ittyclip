@@ -52,9 +52,10 @@ interface WorkerResult {
   highlights: RankedHighlight[];
 }
 
+const Ctx = (self as unknown as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
+
 function decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
   return new Promise((resolve, reject) => {
-    const Ctx = (self as unknown as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
     if (!Ctx) {
       reject(new Error("OfflineAudioContext is unavailable in this worker."));
       return;
@@ -82,6 +83,38 @@ function decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
   });
 }
 
+/**
+ * A full-rate stereo decode of a long video is huge (a 2-hour 48 kHz stereo
+ * buffer is ~2.7 GB of Float32), which can crash the worker and fall back to
+ * a main-thread decode that kills the tab. The envelope only needs relative
+ * loudness, so downmix to mono and resample to 16 kHz (8 kHz past one hour)
+ * before any further processing. The returned buffer keeps the same duration
+ * but a bounded size.
+ */
+const MAX_COMPACT_SAMPLES = 60 * 1024 * 1024; // 240 MB of Float32 — ~2 h at 8 kHz
+
+function compactBuffer(buffer: AudioBuffer): AudioBuffer {
+  if (!Ctx) return buffer;
+  const duration = Math.max(0.01, buffer.duration);
+  const targetRate = duration > 3600 ? 8000 : 16000;
+  const samples = Math.min(Math.ceil(duration * targetRate), MAX_COMPACT_SAMPLES);
+  const ctx = new Ctx(1, 1, targetRate);
+  const out = ctx.createBuffer(1, samples, targetRate);
+  const data = out.getChannelData(0);
+  const left = buffer.getChannelData(0);
+  const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : null;
+  const ratio = buffer.sampleRate / targetRate;
+  for (let i = 0; i < samples; i++) {
+    const pos = i * ratio;
+    const l = Math.min(left.length - 1, Math.floor(pos));
+    const r = Math.min(l + 1, left.length - 1);
+    const w = pos - l;
+    const mono = left[l] * (1 - w) + left[r] * w;
+    data[i] = right ? 0.5 * (mono + right[l] * (1 - w) + right[r] * w) : mono;
+  }
+  return out;
+}
+
 const cancelled = new Set<number>();
 let busy = false;
 
@@ -97,8 +130,9 @@ async function analyze(request: AnalyzeRequest): Promise<void> {
     emit(0);
     const arrayBuffer = await request.file.arrayBuffer();
     if (cancelled.has(id)) throw new DOMException("Aborted", "AbortError");
-    const buffer = await decodeAudioData(arrayBuffer);
+    const decoded = await decodeAudioData(arrayBuffer);
     emit(1);
+    const buffer = compactBuffer(decoded);
     const env = await computeEnvelope(buffer, (fraction) => {
       if (cancelled.has(id)) throw new DOMException("Aborted", "AbortError");
       const [start, stage] = ANALYSIS_STAGES[1];
