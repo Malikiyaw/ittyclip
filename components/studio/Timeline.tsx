@@ -6,9 +6,10 @@ import { usePlayheadRaf } from "@/hooks/usePlayheadRaf";
 import { fmtClock } from "@/lib/types";
 import { useStudio } from "@/store/studio";
 
-type DragState = { mode: "trim-start" | "trim-end" | "move"; clipId: string; startX: number; origStart: number; origEnd: number; };
+type DragState = { mode: "trim-start" | "trim-end" | "move"; clipId: string; startX: number; origStart: number; origEnd: number; moved: boolean };
 type Drag = DragState | null;
 const MIN_LEN = 1;
+const DRAG_THRESHOLD_PX = 3;
 
 export function Timeline() {
   const media = useStudio((s) => s.media);
@@ -60,15 +61,21 @@ export function Timeline() {
     e.preventDefault(); e.stopPropagation();
     const clip = stateRef.current.clips.find((c) => c.id === clipId);
     if (!clip) return;
-    useStudio.getState().commitHistory();
-    dragRef.current = { mode, clipId, startX: e.clientX, origStart: clip.start, origEnd: clip.end };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    dragRef.current = { mode, clipId, startX: e.clientX, origStart: clip.start, origEnd: clip.end, moved: false };
     useStudio.getState().setActiveClip(clipId);
   };
 
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const d = dragRef.current; if (!d) return;
-      const px = zoom, delta = (e.clientX - d.startX) / px, s = useStudio.getState();
+      const distance = Math.abs(e.clientX - d.startX);
+      if (!d.moved && distance < DRAG_THRESHOLD_PX) return;
+      if (!d.moved) {
+        d.moved = true;
+        useStudio.getState().commitHistory();
+      }
+      const px = Math.max(1, zoom), delta = (e.clientX - d.startX) / px, s = useStudio.getState();
       if (d.mode === "move") {
         const len = d.origEnd - d.origStart, raw = clamp(d.origStart + delta);
         const byStart = snap(raw), byEnd = snap(raw + len) - len;
@@ -78,22 +85,23 @@ export function Timeline() {
         s.updateClip(d.clipId, { start, end: start + len });
       } else if (d.mode === "trim-start") {
         let start = clamp(snap(d.origStart + delta));
-        if (d.origEnd - start < MIN_LEN) start = d.origEnd - MIN_LEN;
+        if (d.origEnd - start < MIN_LEN) start = Math.max(0, d.origEnd - MIN_LEN);
         s.updateClip(d.clipId, { start });
       } else {
         let end = clamp(snap(d.origEnd + delta));
-        if (end - d.origStart < MIN_LEN) end = d.origStart + MIN_LEN;
+        if (end - d.origStart < MIN_LEN) end = Math.min(duration, d.origStart + MIN_LEN);
         s.updateClip(d.clipId, { end });
       }
     };
     const up = () => { dragRef.current = null; };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
-  }, [zoom, duration]);
+    window.addEventListener("pointercancel", up);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+  }, [zoom, duration, bounds]);
 
   if (!media) return null;
-  const ticks = [];
+  const ticks: number[] = [];
   const step = zoom < 40 ? 60 : zoom < 90 ? 30 : zoom < 160 ? 10 : 5;
   for (let t = 0; t <= duration + 1; t += step) ticks.push(t);
 
@@ -104,7 +112,7 @@ export function Timeline() {
         <span className="shrink-0 font-mono text-[10px] text-white/45">{clips.length} clip{clips.length === 1 ? "" : "s"}</span>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <span className="font-mono text-[10px] text-white/35">zoom</span>
-          <input type="range" min={30} max={320} value={zoom} onChange={(e) => setZoom(parseInt(e.target.value))} className="w-32 shrink-0" aria-label="Timeline zoom" />
+          <input type="range" min={30} max={320} value={zoom} onChange={(e) => setZoom(parseInt(e.target.value, 10))} className="w-32 shrink-0" aria-label="Timeline zoom" />
           <button onClick={() => { useStudio.getState().clearTimeline(); useStudio.getState().showToast("Timeline cleared"); }} className="s-btn shrink-0 px-2.5 py-1 text-[10px]">clear</button>
         </div>
       </div>
@@ -126,7 +134,7 @@ export function Timeline() {
             {captions.length > 0 && <div className="absolute top-0 right-0 left-0 h-7 border-b border-white/10" aria-hidden />}
             {captions.slice(0, 600).map((line) => line.words.map((w, wi) => {
               const left = w.start * zoom, width = Math.max(2, (w.end - w.start) * zoom);
-              return <button key={`${line.id}-${wi}`} title={w.text} onPointerDown={(e) => { e.stopPropagation(); useStudio.getState().setPlayhead(w.start); }} className="absolute top-1.5 h-3.5 cursor-pointer rounded-sm border border-white/15 bg-white/15 transition-colors hover:border-white/60 hover:bg-white/45" style={{ left, width }} aria-label={`Caption word: ${w.text}`} />;
+              return <button key={`${line.id}-${wi}`} title={w.text} onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); useStudio.getState().setPlayhead(w.start); }} className="absolute top-1.5 h-3.5 cursor-pointer rounded-sm border border-white/15 bg-white/15 transition-colors hover:border-white/60 hover:bg-white/45" style={{ left, width }} aria-label={`Caption word: ${w.text}`} />;
             }))}
           </div>
 
@@ -134,8 +142,8 @@ export function Timeline() {
             {clips.map((clip) => {
               const left = clip.start * zoom, width = Math.max(6, (clip.end - clip.start) * zoom), active = clip.id === activeClipId;
               return <div key={clip.id} className={`group absolute top-1 bottom-1 touch-none rounded-lg border transition-shadow ${active ? "border-white bg-white shadow-[0_0_28px_rgba(255,255,255,0.25)]" : "border-white/25 bg-white/10 hover:border-white/60"}`} style={{ left, width }} onPointerDown={(e) => beginDrag(e, clip.id, "move")}>
-                <div className={`absolute top-0 bottom-0 -left-1 w-3 cursor-ew-resize rounded-l-md transition-colors ${active ? "bg-black/20" : "bg-transparent group-hover:bg-white/40"}`} onPointerDown={(e) => beginDrag(e, clip.id, "trim-start")} aria-hidden />
-                <div className={`absolute top-0 bottom-0 -right-1 w-3 cursor-ew-resize rounded-r-md transition-colors ${active ? "bg-black/20" : "bg-transparent group-hover:bg-white/40"}`} onPointerDown={(e) => beginDrag(e, clip.id, "trim-end")} aria-hidden />
+                <div className={`absolute top-0 bottom-0 -left-1 w-3 cursor-ew-resize rounded-l-md transition-colors ${active ? "bg-black/20" : "bg-transparent group-hover:bg-white/40"}`} onPointerDown={(e) => beginDrag(e, clip.id, "trim-start")} aria-label="Trim clip start" role="slider" />
+                <div className={`absolute top-0 bottom-0 -right-1 w-3 cursor-ew-resize rounded-r-md transition-colors ${active ? "bg-black/20" : "bg-transparent group-hover:bg-white/40"}`} onPointerDown={(e) => beginDrag(e, clip.id, "trim-end")} aria-label="Trim clip end" role="slider" />
                 <div className="pointer-events-none flex h-full items-center justify-between px-2.5"><span className={`truncate text-[9px] font-semibold ${active ? "text-black" : "text-white/90"}`} title={clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}>{clip.label || `${fmtClock(clip.start)} → ${fmtClock(clip.end)}`}</span><span className={`ml-1 shrink-0 font-mono text-[9px] ${active ? "text-black/60" : "text-white/60"}`}>{clip.score?.toFixed(0) ?? ""}</span></div>
                 {active && <div className="pointer-events-none absolute -top-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-black shadow-[0_0_8px_rgba(0,0,0,0.8)]" aria-hidden />}
               </div>;
