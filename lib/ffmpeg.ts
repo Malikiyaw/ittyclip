@@ -8,15 +8,22 @@ const BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
 
+/** FFmpeg WASM needs WebAssembly plus SharedArrayBuffer in the browser build. */
 export function supportsBrowserEncoding(): boolean {
-  return typeof WebAssembly !== "undefined";
+  return typeof window !== "undefined" &&
+    typeof WebAssembly !== "undefined" &&
+    typeof SharedArrayBuffer !== "undefined" &&
+    typeof crossOriginIsolated !== "undefined" &&
+    crossOriginIsolated;
 }
 
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg) return ffmpeg;
   if (loading) return loading;
   loading = (async () => {
-    if (!supportsBrowserEncoding()) throw new Error("This browser does not support in-browser video encoding.");
+    if (!supportsBrowserEncoding()) {
+      throw new Error("In-browser encoding needs a cross-origin-isolated browser with SharedArrayBuffer. Use Chrome, Edge, or Firefox with the site served with COOP/COEP headers.");
+    }
     const instance = new FFmpeg();
     await instance.load({
       coreURL: await toBlobURL(`${BASE}/ffmpeg-core.js`, "text/javascript"),
@@ -39,22 +46,40 @@ const DEFAULT_CAPTION_SETTINGS: CaptionSettings = {
   backgroundOpacity: 0.55, lineSpacing: 1.25, animation: "word-pop", uppercase: false,
 };
 
-function buildDrawtext(lines: CaptionLine[], segmentOffsets: number[], res: number, aspect: number, settings: CaptionSettings): string[] {
+/**
+ * `segmentOffsets` are offsets in the concatenated output. Each caption is
+ * first clipped against the corresponding source segment and then shifted by
+ * that segment's output offset. This prevents captions from later source
+ * segments being rendered at the wrong output time.
+ */
+function buildDrawtext(
+  lines: CaptionLine[],
+  segments: { start: number; end: number; outputStart: number }[],
+  res: number,
+  aspect: number,
+  settings: CaptionSettings,
+): string[] {
   const filters: string[] = [];
   const color = settings.textColor.replace("#", "0x");
   const yFrac = settings.position === "top" ? 0.12 : settings.position === "middle" ? 0.45 : 0.74;
   const y = Math.round(res * aspect * yFrac);
-  for (const line of lines) for (let i = 0; i < segmentOffsets.length - 1; i++) {
-    const segStart = segmentOffsets[i], segEnd = segmentOffsets[i + 1];
-    const overlapStart = Math.max(line.start, segStart), overlapEnd = Math.min(line.end, segEnd);
-    if (overlapEnd <= overlapStart) continue;
-    const localStart = overlapStart - segStart, localEnd = overlapEnd - segStart;
-    const fontsize = Math.round(res * 0.052 * settings.size), boxH = Math.round(fontsize * 0.55);
-    const hasBox = settings.background !== "none", boxAlpha = hasBox ? settings.backgroundOpacity : 0;
-    const text = settings.uppercase ? line.text.toUpperCase() : line.text;
-    const border = settings.stroke ? `:borderw=${Math.max(1, Math.round(fontsize * 0.04))}:bordercolor=black@0.85` : "";
-    const shadow = settings.shadow ? `:shadowx=0:shadowy=2:shadowcolor=black@0.85` : "";
-    filters.push(`drawtext=fontfile=/font.ttf:text='${escapeDrawtextAlpha(text)}':fontsize=${fontsize}:fontcolor=${color}:box=${hasBox ? 1 : 0}:boxcolor=black@${boxAlpha.toFixed(2)}:boxborderw=${boxH}:x=(w-text_w)/2:y=${y}:enable='between(t,${localStart.toFixed(2)},${localEnd.toFixed(2)})'${border}${shadow}`);
+
+  for (const segment of segments) {
+    for (const line of lines) {
+      const overlapStart = Math.max(line.start, segment.start);
+      const overlapEnd = Math.min(line.end, segment.end);
+      if (overlapEnd <= overlapStart) continue;
+      const localStart = overlapStart - segment.start + segment.outputStart;
+      const localEnd = overlapEnd - segment.start + segment.outputStart;
+      const fontsize = Math.round(res * 0.052 * settings.size);
+      const boxH = Math.round(fontsize * 0.55);
+      const hasBox = settings.background !== "none";
+      const boxAlpha = hasBox ? settings.backgroundOpacity : 0;
+      const text = settings.uppercase ? line.text.toUpperCase() : line.text;
+      const border = settings.stroke ? `:borderw=${Math.max(1, Math.round(fontsize * 0.04))}:bordercolor=black@0.85` : "";
+      const shadow = settings.shadow ? `:shadowx=0:shadowy=2:shadowcolor=black@0.85` : "";
+      filters.push(`drawtext=fontfile=/font.ttf:text='${escapeDrawtextAlpha(text)}':fontsize=${fontsize}:fontcolor=${color}:box=${hasBox ? 1 : 0}:boxcolor=black@${boxAlpha.toFixed(2)}:boxborderw=${boxH}:x=(w-text_w)/2:y=${y}:enable='between(t,${localStart.toFixed(2)},${localEnd.toFixed(2)})'${border}${shadow}`);
+    }
   }
   return filters;
 }
@@ -80,6 +105,26 @@ async function probeSourceDimensions(file: Blob): Promise<{ width: number; heigh
     });
   } finally {
     URL.revokeObjectURL(url);
+  }
+}
+
+async function probeHasAudio(instance: FFmpeg, logTail: string[]): Promise<boolean> {
+  logTail.length = 0;
+  const onLog = ({ message }: { message: string }) => {
+    logTail.push(message);
+    if (logTail.length > 80) logTail.shift();
+  };
+  instance.on("log", onLog);
+  try {
+    try {
+      await instance.exec(["-hide_banner", "-i", "input.bin", "-map", "0:a:0?", "-c:a", "copy", "-f", "null", "-"]);
+    } catch {
+      // FFmpeg can return a non-zero code for a null output with no audio. The
+      // log is still enough to distinguish an audio stream from a video-only file.
+    }
+    return logTail.some((line) => /\bAudio:/i.test(line));
+  } finally {
+    instance.off("log", onLog);
   }
 }
 
@@ -110,21 +155,33 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
   try {
     await instance.writeFile("input.bin", await fetchFile(file));
 
+    const hasAudio = await probeHasAudio(instance, []);
     const parts: string[] = [];
-    const offsets: number[] = [0];
+    const captionSegments: { start: number; end: number; outputStart: number }[] = [];
     let acc = 0;
+
     safeSegments.forEach((seg, i) => {
       const d = Math.max(0.001, seg.end - seg.start);
       parts.push(
         `[0:v]trim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`,
-        `[0:a]atrim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`
       );
+      if (hasAudio) {
+        parts.push(`[0:a]atrim=start=${seg.start.toFixed(3)}:end=${seg.end.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
+      }
+      captionSegments.push({ start: seg.start, end: seg.end, outputStart: acc });
       acc += d;
-      offsets.push(acc);
     });
+
     const total = Math.max(0.5, acc);
-    const concatIn = safeSegments.map((_, i) => `[v${i}][a${i}]`).join("");
-    const concat = `${concatIn}concat=n=${safeSegments.length}:v=1:a=1[vc][ca]`;
+    let concatIn = "";
+    if (hasAudio) {
+      concatIn = safeSegments.map((_, i) => `[v${i}][a${i}]`).join("");
+      parts.push(`${concatIn}concat=n=${safeSegments.length}:v=1:a=1[vc][ca]`);
+    } else {
+      concatIn = safeSegments.map((_, i) => `[v${i}]`).join("");
+      parts.push(`${concatIn}concat=n=${safeSegments.length}:v=1:a=0[vc]`);
+    }
+
     const chain: string[] = ["[vc]"];
     const reframeCrop = job.reframe ? buildCropExpression(job.reframe, aspect, vw, vh, total) : null;
     chain.push(reframeCrop || `crop=${cropW}:${cropH}:((iw-${cropW})/2):((ih-${cropH})/2)`);
@@ -132,29 +189,38 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
 
     const captionSettings = job.captionSettings ?? DEFAULT_CAPTION_SETTINGS;
     let burnCaptions = job.burnCaptions;
-    if (burnCaptions) {
+    const needsFont = burnCaptions || job.watermark;
+    if (needsFont) {
       try {
         const fontData = await fetch("/fonts/ArchivoBlack-Regular.ttf").then((r) => {
           if (!r.ok) throw new Error("Font asset unavailable");
           return r.arrayBuffer();
         });
         await instance.writeFile("font.ttf", new Uint8Array(fontData));
-      } catch {
+      } catch (err) {
+        if (burnCaptions) throw new Error(`Caption font unavailable: ${err instanceof Error ? err.message : String(err)}`);
+        // Watermark is optional; continue without it if its font asset is unavailable.
         burnCaptions = false;
       }
     }
     if (burnCaptions) {
-      for (const f of buildDrawtext(job.captions, offsets, job.resolution, aspect, captionSettings)) chain.push(f);
+      for (const f of buildDrawtext(job.captions, captionSegments, job.resolution, aspect, captionSettings)) chain.push(f);
     }
-    if (job.watermark) {
+    if (job.watermark && needsFont) {
       const ws = Math.max(20, Math.round(job.resolution * 0.03));
       chain.push(`drawtext=fontfile=/font.ttf:text='ittyclip':fontsize=${ws}:fontcolor=white@0.35:x=w-text_w-24:y=24`);
     }
 
-    const filterComplex = [...parts, concat, `${chain.join(",")},format=yuv420p[vout]`].join(";");
-    const args = job.format === "mp4"
-      ? ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-t", total.toFixed(3), "-y", "out.mp4"]
-      : ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", "-map", "[ca]", "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus", "-b:a", "96k", "-t", total.toFixed(3), "-y", "out.webm"];
+    const filterComplex = [...parts, `${chain.join(",")},format=yuv420p[vout]`].join(";");
+    const codecArgs = job.format === "mp4"
+      ? ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"]
+      : ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0"];
+    const audioArgs = job.format === "mp4"
+      ? ["-c:a", "aac", "-b:a", "128k"]
+      : ["-c:a", "libopus", "-b:a", "96k"];
+    const args = ["-i", "input.bin", "-filter_complex", filterComplex, "-map", "[vout]", ...codecArgs];
+    if (hasAudio) args.push("-map", "[ca]", ...audioArgs);
+    args.push("-movflags", "+faststart", "-t", total.toFixed(3), "-y", job.format === "mp4" ? "out.mp4" : "out.webm");
 
     const logTail: string[] = [];
     const onLog = ({ message }: { message: string }) => {
