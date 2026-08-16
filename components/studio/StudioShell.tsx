@@ -5,6 +5,7 @@ import { useStudio } from "@/store/studio";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { TopBar } from "@/components/studio/TopBar";
 import { MediaPanel } from "@/components/studio/MediaPanel";
+import { AICaptionTools } from "@/components/studio/AICaptionTools";
 import { Preview } from "@/components/studio/Preview";
 import { Timeline } from "@/components/studio/Timeline";
 import { UploadZone } from "@/components/studio/UploadZone";
@@ -51,6 +52,12 @@ export function StudioShell() {
             </main>
             <div className="min-w-0 shrink-0">
               <Timeline />
+            </div>
+          </div>
+
+          <div className="pointer-events-none absolute right-3 bottom-[4.5rem] z-40 hidden w-[300px] md:block">
+            <div className="pointer-events-auto max-h-[42dvh] overflow-y-auto">
+              <AICaptionTools />
             </div>
           </div>
 
