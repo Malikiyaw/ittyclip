@@ -13,7 +13,8 @@ export const WHISPER_MODELS: Record<WhisperModelKey, { url: string; label: strin
 
 const MODEL_CACHE_NAME = "whisper.node.wasm.models";
 const SAMPLE_RATE = 16_000;
-const CHUNK_SECONDS = 45;
+// Short chunks keep peak memory low on phones. Whisper still sees the complete video in sequence.
+const CHUNK_SECONDS = 20;
 const NON_SPEECH_TAG = /^\[(?:music|musical|instrumental|applause|laughter|laughing|silence|noise|inaudible|background noise)\]$/i;
 
 interface WasmWhisperModule { configureWasm: (opts: Record<string, unknown>) => void; initWhisper: (opts: { filePath: string; useGpu?: boolean; maxModelBytes?: number }) => Promise<WhisperCtx>; }
@@ -32,7 +33,15 @@ async function loadModule(): Promise<WasmWhisperModule> {
     modulePromise = (async () => {
       // @ts-expect-error native ESM import served from public/ (outside TS resolution)
       const mod = (await import(/* webpackIgnore: true */ "/wasm/node-whisper-wasm/index.js")) as unknown as WasmWhisperModule;
-      mod.configureWasm({ workerPath: "/wasm/node-whisper-wasm/worker.js", jsPath: isolated() ? "/wasm/node-whisper-wasm/wasm/whisper-node.threads.js" : "/wasm/node-whisper-wasm/wasm/whisper-node.js", wasmPath: isolated() ? "/wasm/node-whisper-wasm/wasm/whisper-node.threads.wasm" : "/wasm/node-whisper-wasm/wasm/whisper-node.wasm" });
+      // Do NOT use the pthread build for browser transcription. On mobile Safari/iOS,
+      // a worker/thread failure can terminate the WASM runtime and make the tab appear
+      // to reload. Whisper's own maxThreads setting still gives the non-pthread build
+      // safe incremental processing.
+      mod.configureWasm({
+        workerPath: "/wasm/node-whisper-wasm/worker.js",
+        jsPath: "/wasm/node-whisper-wasm/wasm/whisper-node.js",
+        wasmPath: "/wasm/node-whisper-wasm/wasm/whisper-node.wasm",
+      });
       return mod;
     })();
   }
@@ -46,7 +55,7 @@ export async function ensureModelCached(model: WhisperModelKey, onProgress?: (p:
     const cache = await caches.open(MODEL_CACHE_NAME);
     const key = new URL(url, window.location.href).href;
     if (await cache.match(key)) { onProgress?.(1); return; }
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: "no-store" });
     if (!response.ok || !response.body) throw new Error(`Could not download the Whisper model (HTTP ${response.status}).`);
     const total = Number(response.headers.get("content-length") || 0);
     const reader = response.body.getReader();
@@ -73,7 +82,7 @@ export async function ensureModelCached(model: WhisperModelKey, onProgress?: (p:
 async function getContext(model: WhisperModelKey): Promise<WhisperCtx | null> {
   if (contextPromise && modelInMemory === model) return contextPromise;
   if (contextPromise) { const prev = await contextPromise.catch(() => null); if (prev) await prev.release().catch(() => {}); }
-  contextPromise = (async () => { const mod = await loadModule(); try { return await mod.initWhisper({ filePath: WHISPER_MODELS[model].url, useGpu: false }); } catch (err) { console.error("[ittyclip whisper] init failed:", err); return null; } })();
+  contextPromise = (async () => { const mod = await loadModule(); try { return await mod.initWhisper({ filePath: WHISPER_MODELS[model].url, useGpu: false, maxModelBytes: model === "base.en" ? 180 * 1024 * 1024 : 100 * 1024 * 1024 }); } catch (err) { console.error("[ittyclip whisper] init failed:", err); return null; } })();
   modelInMemory = model;
   return contextPromise;
 }
@@ -107,6 +116,7 @@ export async function transcribeCaptions(audioBuffer: AudioBuffer, model: Whispe
     for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
       const from = chunkIndex * chunkSamples;
       const to = Math.min(pcm.length, from + chunkSamples);
+      // slice creates only the small chunk handed to WASM, limiting peak transient memory.
       const chunk = pcm.slice(from, to);
       const chunkOffset = from / SAMPLE_RATE;
       const chunkDuration = chunk.length / SAMPLE_RATE;
@@ -115,7 +125,7 @@ export async function transcribeCaptions(audioBuffer: AudioBuffer, model: Whispe
         language: "en",
         temperature: 0,
         tokenTimestamps: true,
-        maxThreads: Math.max(1, Math.min(4, typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 2 : 2)),
+        maxThreads: 1,
         onProgress: (raw) => { const local = normalizeProgress(raw); lastChunkProgress = Math.max(lastChunkProgress, local); onProgress?.(Math.min(0.995, (chunkIndex + local) / chunkCount)); },
       });
       const result = await promise;
@@ -134,8 +144,6 @@ export async function transcribeCaptions(audioBuffer: AudioBuffer, model: Whispe
         accepted++;
       }
 
-      // Some browser/WASM builds occasionally return the transcript text but incomplete segment metadata.
-      // Use the chunk's own text as a safe fallback rather than displaying one [music] caption for the whole video.
       if (accepted === 0) {
         const fallback = String(result.result ?? "").replace(/\s+/g, " ").trim();
         if (fallback && !isNonSpeech(fallback)) {
@@ -145,9 +153,14 @@ export async function transcribeCaptions(audioBuffer: AudioBuffer, model: Whispe
         }
       }
 
+      // Explicitly yield to the browser between chunks so React can paint the new
+      // percentage and Safari can reclaim temporary WASM/TypedArray memory.
       onProgress?.(Math.min(0.995, (chunkIndex + Math.max(lastChunkProgress, 1)) / chunkCount));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
-  } finally { onProgress?.(1); }
+  } finally {
+    onProgress?.(1);
+  }
 
   lines.sort((a, b) => a.start - b.start);
   const cleaned: CaptionLine[] = [];
