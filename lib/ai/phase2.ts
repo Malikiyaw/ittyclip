@@ -35,7 +35,9 @@ export function sanitizeContext(raw: unknown): Phase2Context {
     const c = clipRaw as Record<string, unknown>;
     const start = Number(c.start); const end = Number(c.end);
     if (finite(start) && finite(end) && end > start) {
-      selectedClip = { start: Math.max(0, Math.min(duration, start)), end: Math.max(0, Math.min(duration, end)) };
+      const safeStart = Math.max(0, Math.min(duration, start));
+      const safeEnd = Math.max(0, Math.min(duration, end));
+      if (safeEnd > safeStart) selectedClip = { start: safeStart, end: safeEnd };
     }
   }
   return { duration, transcript, selectedClip };
@@ -54,9 +56,12 @@ function parseObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function strings(value: unknown, max: number, maxLen = 240) {
+function strings(value: unknown, max: number, maxLen = 240): string[] {
   if (!Array.isArray(value)) throw new Error("AI returned an invalid list");
-  return value.filter((x): x is string => typeof x === "string" && x.trim()).slice(0, max).map((x) => x.trim().slice(0, maxLen));
+  return value
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .slice(0, max)
+    .map((x) => x.trim().slice(0, maxLen));
 }
 
 export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, extra = "") {
@@ -74,7 +79,7 @@ export async function runPhase2(operation: Phase2Operation, ctx: Phase2Context, 
         const start = Number(best.start), end = Number(best.end);
         if (!finite(start) || !finite(end) || end <= start || start < 0 || end > ctx.duration) throw new Error("invalid best moment");
         const score = (x: unknown) => Math.max(0, Math.min(100, Math.round(Number(x) || 0)));
-        return { topic: String(o.topic ?? "" ).slice(0,120), tone: String(o.tone ?? "").slice(0,120), audience: String(o.audience ?? "").slice(0,160), summary: String(o.summary ?? "").slice(0,500), hookStrength: score(o.hookStrength), pacing: score(o.pacing), clarity: score(o.clarity), bestMoment: { start, end, reason: String(best.reason ?? "").slice(0,240) }, suggestions: strings(o.suggestions, 8) };
+        return { topic: String(o.topic ?? "").slice(0,120), tone: String(o.tone ?? "").slice(0,120), audience: String(o.audience ?? "").slice(0,160), summary: String(o.summary ?? "").slice(0,500), hookStrength: score(o.hookStrength), pacing: score(o.pacing), clarity: score(o.clarity), bestMoment: { start, end, reason: String(best.reason ?? "").slice(0,240) }, suggestions: strings(o.suggestions, 8) };
       }
     });
   }
