@@ -113,18 +113,20 @@ export async function exportVideo(file: Blob, job: ExportJob): Promise<{ blob: B
     chain.push(`scale=${targetW}:${targetH}:flags=lanczos`);
     const captionSettings = job.captionSettings ?? DEFAULT_CAPTION_SETTINGS;
     let burnCaptions = job.burnCaptions;
+    let fontAvailable = false;
     const needsFont = burnCaptions || job.watermark;
     if (needsFont) {
       try {
         const fontData = await fetch("/fonts/ArchivoBlack-Regular.ttf").then((r) => { if (!r.ok) throw new Error("Font asset unavailable"); return r.arrayBuffer(); });
         await instance.writeFile("font.ttf", new Uint8Array(fontData));
+        fontAvailable = true;
       } catch (err) {
         if (burnCaptions) throw new Error(`Caption font unavailable: ${err instanceof Error ? err.message : String(err)}`);
         burnCaptions = false;
       }
     }
-    if (burnCaptions) for (const f of buildDrawtext(job.captions, captionSegments, job.resolution, aspect, captionSettings)) chain.push(f);
-    if (job.watermark && needsFont) {
+    if (burnCaptions && fontAvailable) for (const f of buildDrawtext(job.captions, captionSegments, job.resolution, aspect, captionSettings)) chain.push(f);
+    if (job.watermark && fontAvailable) {
       const ws = Math.max(20, Math.round(job.resolution * 0.03));
       chain.push(`drawtext=fontfile=/font.ttf:text='ittyclip':fontsize=${ws}:fontcolor=white@0.35:x=w-text_w-24:y=24`);
     }
