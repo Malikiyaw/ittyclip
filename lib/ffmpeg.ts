@@ -4,7 +4,7 @@ import type { CaptionLine, CaptionSettings, ExportJob } from "@/lib/types";
 import { escapeDrawtext } from "@/lib/captions";
 import { buildCropExpression } from "@/lib/reframe/trajectory";
 
-const BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+const BASE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
 
