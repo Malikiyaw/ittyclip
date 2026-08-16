@@ -6,6 +6,7 @@ import { useKeyboard } from "@/hooks/useKeyboard";
 import { TopBar } from "@/components/studio/TopBar";
 import { MediaPanel } from "@/components/studio/MediaPanel";
 import { AICaptionTools } from "@/components/studio/AICaptionTools";
+import { AIContentTools } from "@/components/studio/AIContentTools";
 import { Preview } from "@/components/studio/Preview";
 import { Timeline } from "@/components/studio/Timeline";
 import { UploadZone } from "@/components/studio/UploadZone";
@@ -34,41 +35,25 @@ export function StudioShell() {
           >
             <div className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#07080d]/95 px-4 py-2.5 backdrop-blur md:hidden">
               <span className="font-mono text-[10px] tracking-[0.25em] text-white/60 uppercase">Studio tools</span>
-              <button
-                type="button"
-                onClick={() => setMobilePanelOpen(false)}
-                className="rounded-full border border-white/15 px-3 py-1.5 text-[10px] text-white/75"
-                aria-label="Hide studio tools"
-              >
-                Hide
-              </button>
+              <button type="button" onClick={() => setMobilePanelOpen(false)} className="rounded-full border border-white/15 px-3 py-1.5 text-[10px] text-white/75" aria-label="Hide studio tools">Hide</button>
             </div>
             <MediaPanel onExport={() => setExportOpen(true)} />
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:order-2">
-            <main className="studio-preview min-h-0 min-w-0 flex-1 overflow-hidden">
-              <Preview />
-            </main>
-            <div className="min-w-0 shrink-0">
-              <Timeline />
-            </div>
+            <main className="studio-preview min-h-0 min-w-0 flex-1 overflow-hidden"><Preview /></main>
+            <div className="min-w-0 shrink-0"><Timeline /></div>
           </div>
 
           <div className="pointer-events-none absolute right-3 bottom-[4.5rem] z-40 hidden w-[300px] md:block">
-            <div className="pointer-events-auto max-h-[42dvh] overflow-y-auto">
+            <div className="pointer-events-auto max-h-[62dvh] space-y-2 overflow-y-auto">
               <AICaptionTools />
+              <AIContentTools />
             </div>
           </div>
 
           <div className="absolute bottom-[4.25rem] left-1/2 z-40 flex -translate-x-1/2 md:hidden">
-            <button
-              type="button"
-              onClick={() => setMobilePanelOpen((open) => !open)}
-              className="flex items-center gap-2 rounded-full border border-white/15 bg-black/85 px-4 py-2.5 text-[11px] font-medium text-white shadow-[0_10px_35px_rgba(0,0,0,0.65)] backdrop-blur-xl"
-              aria-expanded={mobilePanelOpen}
-              aria-controls="mobile-studio-tools"
-            >
+            <button type="button" onClick={() => setMobilePanelOpen((open) => !open)} className="flex items-center gap-2 rounded-full border border-white/15 bg-black/85 px-4 py-2.5 text-[11px] font-medium text-white shadow-[0_10px_35px_rgba(0,0,0,0.65)] backdrop-blur-xl" aria-expanded={mobilePanelOpen} aria-controls="mobile-studio-tools">
               <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
               {mobilePanelOpen ? "Hide tools" : "Edit / AI tools"}
             </button>
@@ -79,11 +64,7 @@ export function StudioShell() {
           {pendingProject && (
             <div className="z-20 flex shrink-0 items-start gap-3 border-b border-white/15 bg-white/[0.06] px-4 py-2.5 backdrop-blur sm:px-5">
               <span className="text-sm" aria-hidden>📂</span>
-              <p className="text-[11px] leading-relaxed text-white/80">
-                <span className="font-semibold text-white">{pendingProject.project.name}</span> loaded —
-                drop the original video ({pendingProject.media?.name ?? "unknown file"}) to restore your
-                clips, captions, and settings.
-              </p>
+              <p className="text-[11px] leading-relaxed text-white/80"><span className="font-semibold text-white">{pendingProject.project.name}</span> loaded — drop the original video ({pendingProject.media?.name ?? "unknown file"}) to restore your clips, captions, and settings.</p>
             </div>
           )}
           <UploadZone />
